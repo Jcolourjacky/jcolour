@@ -87,6 +87,7 @@ public:
     void clearGuides()   { guidesV_.clear(); guidesH_.clear(); update(); }
     void addGuideV(double mm) { guidesV_.push_back(mm); update(); }
     void addGuideH(double mm) { guidesH_.push_back(mm); update(); }
+    void setRulerOrigin(double xmm, double ymm) { rulerOrigin_ = {xmm, ymm}; update(); }
     void toggleGuides()  { showGuides_ = !showGuides_; update(); }   // Cmd+;
 
     // InDesign「编辑 > 多重复制」：以选中块为原点铺 行×列（含间距）
@@ -137,6 +138,8 @@ private:
 
     // InDesign 式标尺
     Unit   unit_ = Unit::MM;
+    QPointF rulerOrigin_{0, 0};      // 零位（纸面 mm）；角落方块拖出调整，双击复位
+    bool    draggingOrigin_ = false;
     QVector<double> guidesV_, guidesH_;   // 参考线（纸面 mm）
     int    dragGuideKind_ = 0;            // 0 无 · 1 竖(V) · 2 横(H)
     int    dragGuideIdx_  = -1;           // -1 = 正在从标尺拖出新线

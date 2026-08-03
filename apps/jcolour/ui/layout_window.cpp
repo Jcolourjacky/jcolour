@@ -409,7 +409,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
         if (dragGuideKind_ != 0) {
             const auto& list = (dragGuideKind_ == 1) ? guidesV_ : guidesH_;
             const int idx = dragGuideIdx_ >= 0 ? dragGuideIdx_ : list.size() - 1;
-            const double v = list[idx];
+            const double v = list[idx] - (dragGuideKind_ == 1 ? rulerOrigin_.x() : rulerOrigin_.y());
             g.setPen(Qt::white);
             const QString txt = QStringLiteral("%1 mm").arg(v, 0, 'f', 1);
             const QRectF tr(cursorPx_.x() + 10, cursorPx_.y() - 22, 74, 17);
@@ -466,32 +466,51 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
     };
 
     QFont rf = g.font(); rf.setPointSizeF(6.5); g.setFont(rf);
-    const int nX = int(kPaperW / unitMm / minorU) + 1;
-    const int nY = int(kPaperH / unitMm / minorU) + 1;
-    for (int i = 0; i <= nX; ++i) {
-        const double u = i * minorU;
-        const double x = p.x() + u * unitMm * s;
-        if (x < kRuler || x > width()) continue;
-        const bool isLabel = (i % labelEvery == 0);
-        g.setPen(isLabel ? QColor("#7c828a") : QColor("#b4bac2"));
-        g.drawLine(QPointF(x, kRuler - (isLabel ? 6 : 3)), QPointF(x, kRuler));
-        if (isLabel)
-            g.drawText(QRectF(x + 2, 1, 46, kRuler - 5), Qt::AlignLeft | Qt::AlignBottom, fmt(u));
-    }
-    for (int i = 0; i <= nY; ++i) {
-        const double u = i * minorU;
-        const double y = p.y() + u * unitMm * s;
-        if (y < kRuler || y > height()) continue;
-        const bool isLabel = (i % labelEvery == 0);
-        g.setPen(isLabel ? QColor("#7c828a") : QColor("#b4bac2"));
-        g.drawLine(QPointF(kRuler - (isLabel ? 6 : 3), y), QPointF(kRuler, y));
-        if (isLabel) {
-            g.save();
-            g.translate(2, y + 2);
-            g.rotate(90);
-            g.drawText(0, 0, fmt(u));
-            g.restore();
+    // 刻度以零位（rulerOrigin_，角落方块可拖动调整）为基准；零点左/上侧为负值
+    const double stepMm = minorU * unitMm;
+    const auto isLbl = [labelEvery](int k) { return ((k % labelEvery) + labelEvery) % labelEvery == 0; };
+    {
+        const double o = rulerOrigin_.x();
+        const int k0 = int(std::floor((0 - o) / stepMm)), k1 = int(std::ceil((kPaperW - o) / stepMm));
+        for (int k = k0; k <= k1; ++k) {
+            const double mmPos = o + k * stepMm;
+            if (mmPos < -1e-9 || mmPos > kPaperW + 1e-9) continue;
+            const double x = p.x() + mmPos * s;
+            if (x < kRuler || x > width()) continue;
+            const bool lab = isLbl(k);
+            g.setPen(lab ? QColor("#7c828a") : QColor("#b4bac2"));
+            g.drawLine(QPointF(x, kRuler - (lab ? 6 : 3)), QPointF(x, kRuler));
+            if (lab)
+                g.drawText(QRectF(x + 2, 1, 46, kRuler - 5), Qt::AlignLeft | Qt::AlignBottom,
+                           fmt(k * minorU));
         }
+    }
+    {
+        const double o = rulerOrigin_.y();
+        const int k0 = int(std::floor((0 - o) / stepMm)), k1 = int(std::ceil((kPaperH - o) / stepMm));
+        for (int k = k0; k <= k1; ++k) {
+            const double mmPos = o + k * stepMm;
+            if (mmPos < -1e-9 || mmPos > kPaperH + 1e-9) continue;
+            const double y = p.y() + mmPos * s;
+            if (y < kRuler || y > height()) continue;
+            const bool lab = isLbl(k);
+            g.setPen(lab ? QColor("#7c828a") : QColor("#b4bac2"));
+            g.drawLine(QPointF(kRuler - (lab ? 6 : 3), y), QPointF(kRuler, y));
+            if (lab) {
+                g.save();
+                g.translate(2, y + 2);
+                g.rotate(90);
+                g.drawText(0, 0, fmt(k * minorU));
+                g.restore();
+            }
+        }
+    }
+
+    // 零位拖动中：十字线跟随光标（InDesign 拖零点的视觉）
+    if (draggingOrigin_ && cursorPx_.x() > 0) {
+        g.setPen(QPen(QColor("#7c828a"), 1, Qt::DashLine));
+        g.drawLine(QPointF(cursorPx_.x(), 0), QPointF(cursorPx_.x(), height()));
+        g.drawLine(QPointF(0, cursorPx_.y()), QPointF(width(), cursorPx_.y()));
     }
 
     // 光标位置指示（InDesign 的标尺细线）
@@ -510,6 +529,14 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
 void LayoutCanvas::mousePressEvent(QMouseEvent* e) {
     const QPointF pos = e->position();
     setFocus();
+
+    // ---- InDesign 式：角落方块拖出 = 调整标尺零位 ----
+    if (showRulers_ && e->button() == Qt::LeftButton &&
+        pos.x() < kRuler && pos.y() < kRuler) {
+        draggingOrigin_ = true;
+        update();
+        return;
+    }
 
     // ---- InDesign 式：从标尺拖出参考线（任意工具下都可用）----
     if (showRulers_ && e->button() == Qt::LeftButton) {
@@ -701,6 +728,9 @@ void LayoutCanvas::mouseMoveEvent(QMouseEvent* e) {
         return;
     }
 
+    // ---- 零位拖动中（十字线跟随，见 paint）----
+    if (draggingOrigin_) { update(); return; }
+
     // ---- marquee 框选中 ----
     if (marquee_) {
         marqueeB_ = pos;
@@ -790,6 +820,12 @@ void LayoutCanvas::mouseReleaseEvent(QMouseEvent* e) {
         update();
     }
     if (panning_) { panning_ = false; setCursor(Qt::OpenHandCursor); }
+    // 零位落定（InDesign：松手处即新零点）
+    if (draggingOrigin_) {
+        draggingOrigin_ = false;
+        rulerOrigin_ = pxToMm(e->position());
+        update();
+    }
     // 框选落定：选中与框相交的块（InDesign 橡皮筋语义）
     if (marquee_) {
         marquee_ = false;
@@ -939,6 +975,12 @@ void LayoutCanvas::keyReleaseEvent(QKeyEvent* e) {
 
 void LayoutCanvas::mouseDoubleClickEvent(QMouseEvent* e) {
     const QPointF pos = e->position();
+    // 双击角落方块 = 零位复位到纸张左上角（InDesign 同款）
+    if (showRulers_ && pos.x() < kRuler && pos.y() < kRuler) {
+        rulerOrigin_ = QPointF(0, 0);
+        update();
+        return;
+    }
     // 双击标尺 = 在该处加参考线（InDesign：顶标尺加竖线，左标尺加横线）
     if (showRulers_ && pos.y() < kRuler && pos.x() >= kRuler) { addGuideV(pxToMm(pos).x()); return; }
     if (showRulers_ && pos.x() < kRuler && pos.y() >= kRuler) { addGuideH(pxToMm(pos).y()); return; }
@@ -2222,6 +2264,8 @@ void LayoutWindow::runActionForShot(const QString& action) {
         canvas_->addGuideV(150); canvas_->addGuideV(305);
         canvas_->addGuideH(400);
     }
+    else if (action == QLatin1String("origin"))     // 演示零位偏移（截图验证）
+        canvas_->setRulerOrigin(150, 100);
     else if (action == QLatin1String("submit")) submitLayoutToQueue();
     else if (action == QLatin1String("nest")) runAutoNest();
     else if (action == QLatin1String("settings")) {
