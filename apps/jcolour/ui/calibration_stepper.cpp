@@ -5,6 +5,7 @@
 #include "../theme.h"
 #include "icons.h"
 #include "measure_widget.h"
+#include "measure_driver_i1.h"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -396,7 +397,13 @@ void CalibrationStepper::doStepAction() {
                 mdlg.resize(680, 520);
                 auto* ml = new QVBoxLayout(&mdlg);
                 ml->setContentsMargins(18, 16, 18, 14);
-                auto* driver = new MockMeasureDriver(&mdlg);   // Spike 3 後換 i1Pro3 後端
+                // 真儀器優先（i1Pro3.framework 運行時載入），無 SDK/無設備回落 Mock
+                MeasureDriver* driver = nullptr;
+                {
+                    auto* i1 = new I1Pro3MeasureDriver(&mdlg);
+                    if (i1->connectDevice()) driver = i1;
+                    else { delete i1; driver = new MockMeasureDriver(&mdlg); }
+                }
                 const QString chartId = draft_.id.left(8) + "-autocal";
                 auto* mw = new MeasureWidget(chartId, 8, 21, driver, &mdlg);
                 ml->addWidget(mw, 1);

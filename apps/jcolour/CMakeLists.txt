@@ -14,7 +14,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
 find_package(OpenGL REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LCMS2 REQUIRED lcms2)
-pkg_check_modules(TIFF REQUIRED libtiff)
+pkg_check_modules(TIFF REQUIRED libtiff-4)
 
 # Use full library paths to avoid linker issues with -l flags
 find_library(LCMS2_FULL_PATH lcms2 PATHS /opt/homebrew/opt/little-cms2/lib /opt/homebrew/lib NO_DEFAULT_PATH REQUIRED)
@@ -177,6 +177,8 @@ set(JCOLOUR_SOURCES
     ui/calibration_stepper.h
     ui/measure_widget.cpp
     ui/measure_widget.h
+    ui/measure_driver_i1.cpp
+    ui/measure_driver_i1.h
     ui/print_gate_bar.cpp
     ui/print_gate_bar.h
     ui/page_ink_management.cpp
@@ -257,8 +259,6 @@ target_link_libraries(jcolour-ui PRIVATE
     ${LCMS2_FULL_PATH}
     ${TIFF_FULL_PATH}
     "-framework OpenGL"
-    "-F/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk/System/Library/Frameworks"
-    "-framework AGL"
 )
 
 target_include_directories(jcolour-ui PRIVATE

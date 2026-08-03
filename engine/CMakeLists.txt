@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find packages
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LCMS2 REQUIRED lcms2)
-pkg_check_modules(TIFF REQUIRED libtiff)
+pkg_check_modules(TIFF REQUIRED libtiff-4)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 
 # Find full SQLite library path
