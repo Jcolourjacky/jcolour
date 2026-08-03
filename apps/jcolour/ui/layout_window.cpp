@@ -328,6 +328,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
     g.drawText(ut, Qt::AlignCenter, QStringLiteral("利用率 81%"));
 
     // rulers (mm ticks aligned to the paper origin, follow zoom/scroll)
+    if (!showRulers_) return;
     g.setPen(Qt::NoPen);
     g.setBrush(QColor("#eef0f2"));
     g.drawRect(QRectF(kRuler, 0, width() - kRuler, kRuler));
@@ -488,6 +489,18 @@ void LayoutCanvas::wheelEvent(QWheelEvent* e) {
 }
 
 void LayoutCanvas::resizeEvent(QResizeEvent*) { clampScroll(); }
+
+bool LayoutCanvas::event(QEvent* e) {
+    // macOS 触控板捏合缩放；标尺/纸张同一 paint 通道，天然跟随
+    if (e->type() == QEvent::NativeGesture) {
+        auto* g = static_cast<QNativeGestureEvent*>(e);
+        if (g->gestureType() == Qt::ZoomNativeGesture) {
+            zoomBy(int(g->value() * 100));
+            return true;
+        }
+    }
+    return QWidget::event(e);
+}
 
 // ============================================================================
 // LayoutWindow
@@ -836,19 +849,24 @@ QWidget* LayoutWindow::buildToolbox() {
     auto* v = new QVBoxLayout(box);
     v->setContentsMargins(4, 6, 4, 6);
     v->setSpacing(2);
-    struct T { const char* g; const char* tip; };
+    // action=true 的是瞬时动作（放大/缩小等），不参与工具互斥选中
+    struct T { const char* g; const char* tip; bool action; };
     const T tools[] = {
-        {"➤", "选择 / 移动"}, {"A", "文字"}, {"▦", "二维码 / 条码"},
-        {"⤢", "缩放"}, {"⊡", "裁切"}, {"⟳", "旋转 / 镜像"}, {"▤", "拼贴 Tiling"},
-        {"▥", "自动拼版 / 嵌套"}, {"🔍", "放大"}, {"#", "网格 / 参考线"}, {"⟙", "标尺"},
+        {"➤", "选择 / 移动", false}, {"A", "文字", false}, {"▦", "二维码 / 条码", false},
+        {"⊕", "放大 (Cmd+滚轮↑ / Cmd+=)", true}, {"⊖", "缩小 (Cmd+滚轮↓ / Cmd+-)", true},
+        {"⤢", "缩放适配窗口", true},
+        {"⊡", "裁切", false}, {"⟳", "旋转 / 镜像", false}, {"▤", "拼贴 Tiling", false},
+        {"▥", "自动拼版 / 嵌套", true}, {"#", "网格 / 参考线", false}, {"⟙", "标尺显示/隐藏", true},
     };
     bool first = true;
     for (const auto& t : tools) {
         auto* b = glyphBtn(QString::fromUtf8(t.g), QString::fromUtf8(t.tip));
-        b->setCheckable(true);
-        b->setAutoExclusive(true);
         b->setFixedSize(26, 26);
         const QString tip = QString::fromUtf8(t.tip);
+        if (!t.action) {
+            b->setCheckable(true);
+            b->setAutoExclusive(true);
+        }
         if (first) { b->setChecked(true); selectToolBtn_ = b; first = false; }
         if (tip == QStringLiteral("选择 / 移动"))
             connect(b, &QToolButton::clicked, this,
@@ -863,8 +881,14 @@ QWidget* LayoutWindow::buildToolbox() {
                              statusBar()->showMessage(QStringLiteral("二维码工具：在纸张上点击放置二维码"), 4000); });
         else if (tip == QStringLiteral("自动拼版 / 嵌套"))
             connect(b, &QToolButton::clicked, this, [this] { runAutoNest(); });
-        else if (tip == QStringLiteral("放大"))
-            connect(b, &QToolButton::clicked, this, [this] { canvas_->zoomBy(10); });
+        else if (tip.startsWith(QStringLiteral("放大")))
+            connect(b, &QToolButton::clicked, this, [this] { canvas_->zoomBy(+10); });
+        else if (tip.startsWith(QStringLiteral("缩小")))
+            connect(b, &QToolButton::clicked, this, [this] { canvas_->zoomBy(-10); });
+        else if (tip == QStringLiteral("缩放适配窗口"))
+            connect(b, &QToolButton::clicked, this, [this] { canvas_->zoomFit(); });
+        else if (tip == QStringLiteral("标尺显示/隐藏"))
+            connect(b, &QToolButton::clicked, this, [this] { canvas_->toggleRulers(); });
         v->addWidget(b);
     }
     v->addStretch();
@@ -1435,7 +1459,9 @@ void LayoutWindow::selectTabForShot(int tab) {
 }
 
 void LayoutWindow::runActionForShot(const QString& action) {
-    if (action == QLatin1String("submit")) submitLayoutToQueue();
+    if (action.startsWith(QLatin1String("zoom:")))   // zoom:+30 / zoom:-40（复现缩放问题用）
+        canvas_->zoomBy(action.mid(5).toInt());
+    else if (action == QLatin1String("submit")) submitLayoutToQueue();
     else if (action == QLatin1String("nest")) runAutoNest();
     else if (action == QLatin1String("settings")) {
         auto* dlg = new QDialog(this);

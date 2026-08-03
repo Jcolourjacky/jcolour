@@ -61,6 +61,7 @@ public:
     void zoomBy(int deltaPercent);   // ±10 …
     void zoomFit();
     int  zoomPercent() const;        // 100 == paper at 80% of viewport width
+    void toggleRulers() { showRulers_ = !showRulers_; update(); }
 
 signals:
     void selectionChanged(int idx);  // -1 = none
@@ -75,6 +76,7 @@ protected:
     void mouseMoveEvent(QMouseEvent*) override;
     void mouseReleaseEvent(QMouseEvent*) override;
     void wheelEvent(QWheelEvent*) override;
+    bool event(QEvent*) override;    // 触控板捏合缩放 (ZoomNativeGesture)
     void resizeEvent(QResizeEvent*) override;
 
 private:
@@ -88,6 +90,7 @@ private:
     int    sel_   = 0;
     CanvasTool tool_ = CanvasTool::Select;
     double zoom_  = 0.0;     // paper width as fraction of viewport width; 0 = fit on first paint
+    bool   showRulers_ = true;
     double scroll_ = 0.0;    // px
     bool   dragging_ = false;
     int    resizing_ = -1;   // active handle index, -1 = not resizing
