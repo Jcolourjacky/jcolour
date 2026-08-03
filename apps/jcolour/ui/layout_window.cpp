@@ -107,14 +107,19 @@ QToolButton* glyphBtn(const QString& glyph, const QString& tip, QWidget* parent 
 // Toolbar icon button using the shared vector icon set. Checkable buttons get a
 // two-state icon (gray → accent) so the active toggle reads clearly.
 QToolButton* iconBtn(ic::Icon glyph, const QString& tip, QWidget* parent = nullptr) {
-    static const QColor kOff(0x4a, 0x4f, 0x57);
-    static const QColor kOn(0x2e, 0x7d, 0xd7);
+    static const QColor kOff(0x4a, 0x47, 0x40);
+    static const QColor kOn(0xfa, 0xfa, 0xf7);
     auto* b = new QToolButton(parent);
     b->setIcon(ic::toggleIcon(glyph, kOff, kOn, 17));
     b->setIconSize(QSize(17, 17));
     b->setToolTip(tip);
     b->setAutoRaise(true);
     b->setFixedSize(26, 24);
+    // 1a 纸感：选中工具 = 靛蓝底 + 纸白图标（设计稿工具列样式）
+    b->setStyleSheet(
+        "QToolButton{border:none;border-radius:6px;}"
+        "QToolButton:hover{background:rgba(16,10,54,.08);}"
+        "QToolButton:checked{background:#100A36;}");
     return b;
 }
 QFrame* vsep() {
@@ -231,10 +236,10 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
     g.setRenderHint(QPainter::Antialiasing);
 
     // checkerboard workspace
-    g.fillRect(rect(), QColor("#e9ebee"));
+    g.fillRect(rect(), QColor("#ECEAE3"));
     for (int yy = 0; yy < height(); yy += 22)
         for (int xx = ((yy / 22) % 2) * 22; xx < width(); xx += 44)
-            g.fillRect(xx, yy, 22, 22, QColor("#dfe1e4"));
+            g.fillRect(xx, yy, 22, 22, QColor("#E3E0D7"));
 
     const QRectF p = paperRectPx();
     const double s = p.width() / kPaperW;
@@ -257,10 +262,12 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
         const QRectF r = blockRectPx(b);
         if (b.isText) {
             QFont tf = g.font();
+            tf.setFamilies({QStringLiteral("Source Serif 4"), QStringLiteral("Georgia"),
+                            QStringLiteral("Songti SC")});   // 1a：标题衬线
             tf.setPointSizeF(qMax(7.0, r.height() * 0.42));
             tf.setBold(true);
             g.setFont(tf);
-            g.setPen(QColor("#2b2e33"));
+            g.setPen(QColor("#100A36"));
             g.drawText(r, Qt::AlignVCenter | Qt::AlignLeft, "  " + b.text);
         } else if (b.isQr) {
             // QR placeholder — deterministic modules from the payload hash
@@ -317,12 +324,12 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
         g.drawText(QRectF(r.x(), r.bottom() + 1, r.width(), 12), Qt::AlignHCenter, lbl);
 
         if (i != sel_ && multiSel_.contains(i)) {   // 多选中的次级块：细蓝框
-            g.setPen(QPen(QColor("#2e7dd7"), 1.1));
+            g.setPen(QPen(QColor("#0BBAEE"), 1.1));
             g.setBrush(Qt::NoBrush);
             g.drawRect(r);
         }
         if (i == sel_) {
-            g.setPen(QPen(QColor("#2e7dd7"), 1.6));
+            g.setPen(QPen(QColor("#0BBAEE"), 1.6));
             g.setBrush(Qt::NoBrush);
             g.drawRect(r);
             QPen dash(QColor(46, 125, 215, 115), 1, Qt::DashLine);
@@ -331,7 +338,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
             if (multiSel_.size() > 1) { /* 群选时不画缩放手柄（InDesign 语义） */ }
             else {
             g.setPen(QPen(Qt::white, 1));
-            g.setBrush(QColor("#2e7dd7"));
+            g.setBrush(QColor("#0BBAEE"));
             const QPointF c[8] = {
                 r.topLeft(), {r.center().x(), r.top()}, r.topRight(),
                 {r.left(), r.center().y()}, {r.right(), r.center().y()},
@@ -361,7 +368,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
 
     // 裁切角线（每块四角，打印后裁纸用）
     if (showCropMarks_) {
-        g.setPen(QPen(QColor("#23262b"), 1));
+        g.setPen(QPen(QColor("#100A36"), 1));
         const double L = 4.0 * s, gap = 1.2 * s;   // 4mm 线 · 1.2mm 离空
         for (const auto& b : blocks_) {
             if (b.isText) continue;
@@ -389,7 +396,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
 
     // 文字框拖拽预览（虚线框）
     if (creatingText_ && textDragMm_.isValid()) {
-        g.setPen(QPen(QColor("#2e7dd7"), 1, Qt::DashLine));
+        g.setPen(QPen(QColor("#0BBAEE"), 1, Qt::DashLine));
         g.setBrush(Qt::NoBrush);
         g.drawRect(QRectF(p.x() + textDragMm_.x() * s, p.y() + textDragMm_.y() * s,
                           textDragMm_.width() * s, textDragMm_.height() * s));
@@ -397,7 +404,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
 
     // 参考线（InDesign 青色，横竖贯穿画布内容区；Cmd+; 显隐）
     if (showGuides_ && (!guidesV_.isEmpty() || !guidesH_.isEmpty())) {
-        g.setPen(QPen(QColor("#37b6f0"), 1));
+        g.setPen(QPen(QColor("#0BBAEE"), 1));
         for (double gm : guidesV_) {
             const double x = p.x() + gm * s;
             g.drawLine(QPointF(x, kRuler), QPointF(x, height()));
@@ -414,7 +421,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
             g.setPen(Qt::white);
             const QString txt = QStringLiteral("%1 mm").arg(v, 0, 'f', 1);
             const QRectF tr(cursorPx_.x() + 10, cursorPx_.y() - 22, 74, 17);
-            g.setBrush(QColor("#37b6f0"));
+            g.setBrush(QColor("#0BBAEE"));
             g.setPen(Qt::NoPen);
             g.drawRoundedRect(tr, 3, 3);
             g.setPen(Qt::white);
@@ -426,9 +433,9 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
     if (hasMeasure_) {
         const QPointF a(p.x() + measA_.x() * s, p.y() + measA_.y() * s);
         const QPointF b(p.x() + measB_.x() * s, p.y() + measB_.y() * s);
-        g.setPen(QPen(QColor("#e05515"), 1.4));
+        g.setPen(QPen(QColor("#E71655"), 1.4));
         g.drawLine(a, b);
-        g.setBrush(QColor("#e05515"));
+        g.setBrush(QColor("#E71655"));
         g.setPen(Qt::NoPen);
         g.drawEllipse(a, 2.5, 2.5);
         g.drawEllipse(b, 2.5, 2.5);
@@ -446,11 +453,11 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
     // ── InDesign 式标尺：自适应刻度 · 单位切换 · 光标位置指示 ──
     if (!showRulers_) return;
     g.setPen(Qt::NoPen);
-    g.setBrush(QColor("#eef0f2"));
+    g.setBrush(QColor("#F1EFE8"));
     g.drawRect(QRectF(kRuler, 0, width() - kRuler, kRuler));
     g.drawRect(QRectF(0, kRuler, kRuler, height() - kRuler));
     g.drawRect(QRectF(0, 0, kRuler, kRuler));
-    g.setPen(QColor("#d2d5d9"));
+    g.setPen(QColor("#DDD9CF"));
     g.drawLine(0, kRuler, width(), kRuler);
     g.drawLine(kRuler, 0, kRuler, height());
 
@@ -479,7 +486,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
             const double x = p.x() + mmPos * s;
             if (x < kRuler || x > width()) continue;
             const bool lab = isLbl(k);
-            g.setPen(lab ? QColor("#7c828a") : QColor("#b4bac2"));
+            g.setPen(lab ? QColor("#8A8779") : QColor("#C9C5B9"));
             g.drawLine(QPointF(x, kRuler - (lab ? 6 : 3)), QPointF(x, kRuler));
             if (lab)
                 g.drawText(QRectF(x + 2, 1, 46, kRuler - 5), Qt::AlignLeft | Qt::AlignBottom,
@@ -495,7 +502,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
             const double y = p.y() + mmPos * s;
             if (y < kRuler || y > height()) continue;
             const bool lab = isLbl(k);
-            g.setPen(lab ? QColor("#7c828a") : QColor("#b4bac2"));
+            g.setPen(lab ? QColor("#8A8779") : QColor("#C9C5B9"));
             g.drawLine(QPointF(kRuler - (lab ? 6 : 3), y), QPointF(kRuler, y));
             if (lab) {
                 g.save();
@@ -509,20 +516,20 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
 
     // 零位拖动中：十字线跟随光标（InDesign 拖零点的视觉）
     if (draggingOrigin_ && cursorPx_.x() > 0) {
-        g.setPen(QPen(QColor("#7c828a"), 1, Qt::DashLine));
+        g.setPen(QPen(QColor("#8A8779"), 1, Qt::DashLine));
         g.drawLine(QPointF(cursorPx_.x(), 0), QPointF(cursorPx_.x(), height()));
         g.drawLine(QPointF(0, cursorPx_.y()), QPointF(width(), cursorPx_.y()));
     }
 
     // 光标位置指示（InDesign 的标尺细线）
     if (cursorPx_.x() > kRuler && cursorPx_.y() > kRuler) {
-        g.setPen(QColor("#e05515"));
+        g.setPen(QColor("#E71655"));
         g.drawLine(QPointF(cursorPx_.x(), 0), QPointF(cursorPx_.x(), kRuler));
         g.drawLine(QPointF(0, cursorPx_.y()), QPointF(kRuler, cursorPx_.y()));
     }
 
     // 左上角单位标（点击右键换单位）
-    g.setPen(QColor("#7c828a"));
+    g.setPen(QColor("#8A8779"));
     g.drawText(QRectF(0, 0, kRuler, kRuler), Qt::AlignCenter,
                unit_ == Unit::MM ? "mm" : unit_ == Unit::CM ? "cm" : "in");
 }
@@ -865,8 +872,8 @@ void LayoutCanvas::startTextEdit(int idx) {
     editor_->setFont(f);
     editor_->setPlainText(blocks_[idx].text);
     editor_->setStyleSheet(
-        "QTextEdit{background:rgba(255,255,255,235);color:#2b2e33;"
-        "border:1px solid #2e7dd7;border-radius:0;padding:0;}");
+        "QTextEdit{background:rgba(255,255,255,235);color:#100A36;"
+        "border:1px solid #0BBAEE;border-radius:0;padding:0;}");
     editor_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     editor_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     editor_->installEventFilter(this);
@@ -1195,13 +1202,13 @@ LayoutWindow::LayoutWindow(QWidget* parent) : QMainWindow(parent) {
     canvasCol->addWidget(canvas_, 1);
     {
         auto* zrow = new QWidget;
-        zrow->setStyleSheet("background:#eef0f2;border-top:1px solid #d2d5d9;");
+        zrow->setStyleSheet("background:#F1EFE8;border-top:1px solid #DDD9CF;");
         auto* zl = new QHBoxLayout(zrow);
         zl->setContentsMargins(8, 2, 8, 2);
         zl->addStretch();
         auto* zm = iconBtn(ic::Icon::Minus, QStringLiteral("缩小"));
         auto* zv = new QLabel("100%");
-        zv->setStyleSheet("color:#3b3f46;font-size:10px;min-width:34px;qproperty-alignment:AlignCenter;");
+        zv->setStyleSheet("color:#4A4740;font-size:10px;min-width:34px;qproperty-alignment:AlignCenter;");
         auto* zp = iconBtn(ic::Icon::Plus, QStringLiteral("放大"));
         auto* zf = new QPushButton(QStringLiteral("适合"));
         zf->setToolTip(QStringLiteral("整张纸适合窗口"));
@@ -1286,7 +1293,7 @@ void LayoutWindow::buildMenus() {
 QWidget* LayoutWindow::buildToolbar() {
     auto* bar = new QWidget;
     bar->setFixedHeight(34);
-    bar->setStyleSheet("background:#e7e8ea;border-bottom:1px solid #d2d5d9;");
+    bar->setStyleSheet("background:#EAE7DE;border-bottom:1px solid #DDD9CF;");
     auto* h = new QHBoxLayout(bar);
     h->setContentsMargins(6, 0, 6, 0);
     h->setSpacing(2);
@@ -1317,7 +1324,7 @@ QWidget* LayoutWindow::buildToolbar() {
     // ① printer → ② paper → ③ size — the env selectors (user-specified order)
     auto addLbl = [&](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet("color:#6b7079;font-size:10px;margin:0 2px;");
+        l->setStyleSheet("color:#7A776D;font-size:10px;margin:0 2px;");
         h->addWidget(l);
     };
     addLbl(QStringLiteral("打印机"));
@@ -1355,7 +1362,7 @@ QWidget* LayoutWindow::buildToolbar() {
     auto* envBtn = new QPushButton(QStringLiteral(" 打印环境 / 校准…"));
     envBtn->setIcon(ic::icon(ic::Icon::Settings, QColor(0x1f, 0x5f, 0xa8), 14));
     envBtn->setIconSize(QSize(14, 14));
-    envBtn->setStyleSheet("color:#1f5fa8;background:#eaf2fc;border:1px solid #bcd4f2;"
+    envBtn->setStyleSheet("color:#0A6E8C;background:#E7F7FD;border:1px solid #bcd4f2;"
                           "border-radius:4px;padding:2px 8px;font-size:10px;");
     connect(envBtn, &QPushButton::clicked, this, &LayoutWindow::openEnvManager);
     h->addWidget(envBtn);
@@ -1378,7 +1385,7 @@ QWidget* LayoutWindow::buildToolbar() {
     print->setIcon(ic::icon(ic::Icon::Printer, QColor(Qt::white), 15));
     print->setIconSize(QSize(15, 15));
     print->setToolTip(QStringLiteral("打印整版 → 送 RIP 队列"));
-    print->setStyleSheet("background:#2e7dd7;color:#fff;border:none;border-radius:4px;"
+    print->setStyleSheet("background:#100A36;color:#FAFAF7;border:none;border-radius:4px;"
                          "padding:4px 14px;font-weight:600;");
     connect(print, &QPushButton::clicked, this, [this] { submitLayoutToQueue(); });
     h->addWidget(print);
@@ -1391,9 +1398,9 @@ QWidget* LayoutWindow::buildPropBars() {
     propStack_ = new QStackedWidget;
     propStack_->setFixedHeight(30);
     propStack_->setStyleSheet(
-        "QStackedWidget{background:#e7e8ea;border-bottom:1px solid #d2d5d9;}"
+        "QStackedWidget{background:#EAE7DE;border-bottom:1px solid #DDD9CF;}"
         "QDoubleSpinBox,QComboBox{font-size:10px;}"
-        "QLabel{color:#6b7079;font-size:10px;}");
+        "QLabel{color:#7A776D;font-size:10px;}");
 
     auto mmSpin = [](double v, double maxV) {
         auto* s = new QDoubleSpinBox;
@@ -1440,12 +1447,12 @@ QWidget* LayoutWindow::buildPropBars() {
         op->setFixedWidth(58);
         h->addWidget(op);
         auto* aa = new QCheckBox(QStringLiteral("自动调整"));
-        aa->setStyleSheet("font-size:10px;color:#6b7079;");
+        aa->setStyleSheet("font-size:10px;color:#7A776D;");
         h->addWidget(aa);
         h->addStretch();
         warnChip_ = new QPushButton(QStringLiteral("⚠ 2 警告"));
         warnChip_->setToolTip(QStringLiteral("点击查看预检清单"));
-        warnChip_->setStyleSheet("background:#fbf2dd;border:1px solid #e6c878;color:#8a6310;"
+        warnChip_->setStyleSheet("background:#FDF6D9;border:1px solid #E4C60F;color:#6B5A00;"
                                  "border-radius:3px;font-size:9px;font-weight:600;padding:1px 6px;");
         connect(warnChip_, &QPushButton::clicked, this, [this] { rightTabs_->setCurrentIndex(2); });
         h->addWidget(warnChip_);
@@ -1487,7 +1494,7 @@ QWidget* LayoutWindow::buildPropBars() {
         for (auto g : {"⟸", "≡", "⟹", "☰"})
             h->addWidget(glyphBtn(QString::fromUtf8(g), QStringLiteral("段落对齐")));
         auto* tate = new QCheckBox(QStringLiteral("直排内横排"));
-        tate->setStyleSheet("font-size:10px;color:#6b7079;");
+        tate->setStyleSheet("font-size:10px;color:#7A776D;");
         h->addWidget(tate);
         h->addStretch();
         propStack_->addWidget(w);
@@ -1511,7 +1518,7 @@ QWidget* LayoutWindow::buildPropBars() {
 QWidget* LayoutWindow::buildToolbox() {
     auto* box = new QWidget;
     box->setFixedWidth(36);
-    box->setStyleSheet("background:#eef0f2;border-right:1px solid #d2d5d9;"
+    box->setStyleSheet("background:#F1EFE8;border-right:1px solid #DDD9CF;"
                        "QToolButton{font-size:13px;}");
     auto* v = new QVBoxLayout(box);
     v->setContentsMargins(4, 6, 4, 6);
@@ -1521,14 +1528,14 @@ QWidget* LayoutWindow::buildToolbox() {
     const auto sep = [&v] {
         auto* s = new QFrame;
         s->setFixedSize(18, 1);
-        s->setStyleSheet("background:#d2d5d9;border:none;");
+        s->setStyleSheet("background:#DDD9CF;border:none;");
         v->addSpacing(3);
         v->addWidget(s, 0, Qt::AlignHCenter);
         v->addSpacing(3);
     };
     // InDesign 式工具提示：加粗名称 (快捷键) + 灰色说明行；悬停即显
     const auto rich = [](const QString& name, const QString& key, const QString& desc) {
-        return QStringLiteral("<b>%1</b>%2<br/><span style='color:#7c828a'>%3</span>")
+        return QStringLiteral("<b>%1</b>%2<br/><span style='color:#8A8779'>%3</span>")
             .arg(name, key.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(key), desc);
     };
     const auto add = [&](ic::Icon glyph, const QString& tip, bool exclusiveTool,
@@ -1544,7 +1551,7 @@ QWidget* LayoutWindow::buildToolbox() {
     // 点选工具 → 紧挨工具条弹出工具名小标签（1.5s 自动隐藏），状态栏同步用法提示
     auto* toolHud = new QLabel(canvas_);
     toolHud->setStyleSheet(
-        "QLabel{background:rgba(35,38,43,235);color:#fff;border-radius:6px;"
+        "QLabel{background:rgba(16,10,54,235);color:#fff;border-radius:6px;"
         "padding:5px 12px;font-size:12px;font-weight:600;}");
     toolHud->hide();
     auto* hudTimer = new QTimer(this);
@@ -1718,14 +1725,14 @@ QWidget* LayoutWindow::buildRightPanel() {
     rightTabs_->setFixedWidth(252);
     rightTabs_->setDocumentMode(true);
     rightTabs_->setStyleSheet(
-        "QTabWidget::pane{border:none;border-left:1px solid #d2d5d9;background:#f5f6f7;}"
+        "QTabWidget::pane{border:none;border-left:1px solid #DDD9CF;background:#FAFAF7;}"
         "QTabBar::tab{font-size:10px;padding:5px 10px;}"
         "QLabel{font-size:10px;}");
 
     auto hdLbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet("font-size:9px;font-weight:600;color:#868c95;background:#eef0f2;"
-                         "padding:4px 8px;border-bottom:1px solid #e6e8eb;");
+        l->setStyleSheet("font-size:9px;font-weight:600;color:#8A8779;background:#F1EFE8;"
+                         "padding:4px 8px;border-bottom:1px solid #EAE7DE;");
         return l;
     };
     auto kvRow = [](const QString& k, QLabel*& vOut, bool warn = false) {
@@ -1733,9 +1740,9 @@ QWidget* LayoutWindow::buildRightPanel() {
         auto* h = new QHBoxLayout(w);
         h->setContentsMargins(10, 2, 10, 2);
         auto* kl = new QLabel(k);
-        kl->setStyleSheet("color:#6b7079;");
+        kl->setStyleSheet("color:#7A776D;");
         vOut = new QLabel;
-        vOut->setStyleSheet(warn ? "color:#c2861a;font-weight:600;" : "color:#2b2e33;font-weight:600;");
+        vOut->setStyleSheet(warn ? "color:#B58900;font-weight:600;" : "color:#100A36;font-weight:600;");
         h->addWidget(kl);
         h->addStretch();
         h->addWidget(vOut);
@@ -1767,8 +1774,8 @@ QWidget* LayoutWindow::buildRightPanel() {
             const bool stale = modeState(m.key) != cal::CalibState::FRESH;
             b->setStyleSheet(QStringLiteral(
                 "QPushButton{font-size:10px;border:1px solid %1;border-radius:4px;background:#fff;}"
-                "QPushButton:checked{background:#eaf2fc;border-color:#2e7dd7;color:#1f5fa8;font-weight:600;}")
-                .arg(stale ? "#c0392b" : "#d2d5d9"));
+                "QPushButton:checked{background:#E7F7FD;border-color:#0BBAEE;color:#0A6E8C;font-weight:600;}")
+                .arg(stale ? "#c0392b" : "#DDD9CF"));
             if (stale)
                 b->setToolTip(QStringLiteral("线性曲线 %1 天 · 超 1 个月需检查").arg(m.days));
             const QString key = m.key;
@@ -1783,7 +1790,7 @@ QWidget* LayoutWindow::buildRightPanel() {
 
         modeHint_ = new QLabel;
         modeHint_->setWordWrap(true);
-        modeHint_->setStyleSheet("color:#1f5fa8;background:#eaf2fc;border:1px solid #cfe0f4;"
+        modeHint_->setStyleSheet("color:#0A6E8C;background:#E7F7FD;border:1px solid #A9E4F7;"
                                  "border-radius:4px;padding:5px 7px;font-size:9px;margin:2px 10px;");
         v->addWidget(modeHint_);
 
@@ -1795,7 +1802,7 @@ QWidget* LayoutWindow::buildRightPanel() {
             h->setContentsMargins(10, 1, 10, 1);
             auto* l = new QLabel(name);
             l->setFixedWidth(52);
-            l->setStyleSheet("color:#6b7079;");
+            l->setStyleSheet("color:#7A776D;");
             auto* s = new QSlider(Qt::Horizontal);
             s->setRange(0, 100);
             s->setValue(val);
@@ -1809,7 +1816,7 @@ QWidget* LayoutWindow::buildRightPanel() {
             h->setContentsMargins(10, 1, 10, 1);
             auto* l = new QLabel(name);
             l->setFixedWidth(52);
-            l->setStyleSheet("color:#6b7079;");
+            l->setStyleSheet("color:#7A776D;");
             h->addWidget(l);
             h->addStretch();
             for (int i = 0; i < opts.size(); ++i) {
@@ -1819,7 +1826,7 @@ QWidget* LayoutWindow::buildRightPanel() {
                 b->setChecked(i == on);
                 b->setFixedHeight(18);
                 b->setStyleSheet("QPushButton{font-size:9px;padding:0 7px;border:1px solid #c4c9d0;background:#fff;}"
-                                 "QPushButton:checked{background:#eaf2fc;color:#1f5fa8;font-weight:600;}");
+                                 "QPushButton:checked{background:#E7F7FD;color:#0A6E8C;font-weight:600;}");
                 h->addWidget(b);
             }
             return w;
@@ -1827,7 +1834,7 @@ QWidget* LayoutWindow::buildRightPanel() {
         auto hint = [](const QString& t) {
             auto* l = new QLabel(t);
             l->setWordWrap(true);
-            l->setStyleSheet("color:#1f5fa8;background:#eaf2fc;border:1px solid #cfe0f4;"
+            l->setStyleSheet("color:#0A6E8C;background:#E7F7FD;border:1px solid #A9E4F7;"
                              "border-radius:4px;padding:4px 7px;font-size:9px;margin:2px 10px;");
             return l;
         };
@@ -1861,7 +1868,7 @@ QWidget* LayoutWindow::buildRightPanel() {
             ih->setContentsMargins(10, 1, 10, 1);
             auto* il = new QLabel(QStringLiteral("输出 ICC"));
             il->setFixedWidth(52);
-            il->setStyleSheet("color:#6b7079;");
+            il->setStyleSheet("color:#7A776D;");
             auto* ic = new QComboBox;
             ic->addItem(QStringLiteral("PhotoRag_P9500_RGB.icc"));
             ih->addWidget(il);
@@ -1871,7 +1878,7 @@ QWidget* LayoutWindow::buildRightPanel() {
             nh->setContentsMargins(10, 1, 10, 1);
             auto* nl = new QLabel(QStringLiteral("渲染意图"));
             nl->setFixedWidth(52);
-            nl->setStyleSheet("color:#6b7079;");
+            nl->setStyleSheet("color:#7A776D;");
             auto* nc = new QComboBox;
             nc->addItems({QStringLiteral("可感知 Perceptual"), QStringLiteral("相对色度 Rel.Col"),
                           QStringLiteral("饱和度"), QStringLiteral("绝对色度")});
@@ -1898,7 +1905,7 @@ QWidget* LayoutWindow::buildRightPanel() {
                 h->setContentsMargins(10, 0, 10, 0);
                 auto* l = new QLabel(n);
                 l->setFixedWidth(18);
-                l->setStyleSheet("color:#6b7079;");
+                l->setStyleSheet("color:#7A776D;");
                 auto* p = new QProgressBar;
                 p->setRange(0, 100);
                 p->setValue(pct);
@@ -1954,26 +1961,26 @@ QWidget* LayoutWindow::buildRightPanel() {
         if (rows.isEmpty())
             rows = {{QStringLiteral("P9500 · Photo Rag 308"),
                      QStringLiteral("总墨 260% · 4 模式 9 天 ✓"),
-                     QStringLiteral("RGB 需检查"), "#8a6310"},
+                     QStringLiteral("RGB 需检查"), "#6B5A00"},
                     {QStringLiteral("P9500 · Canson Baryta 310"),
                      QStringLiteral("总墨 280% · 全部模式"),
-                     QStringLiteral("过期 18天"), "#8a6310"},
+                     QStringLiteral("过期 18天"), "#6B5A00"},
                     {QStringLiteral("P9500 · Legacy Fibre"),
                      QStringLiteral("墨批 #A6 旧批"),
                      QStringLiteral("墨批已变"), "#9a2418"}};
         for (const auto& r : rows) {
             auto* b = new QPushButton;
             b->setFixedHeight(44);
-            b->setStyleSheet("QPushButton{background:#fff;border:none;border-bottom:1px solid #e6e8eb;text-align:left;}"
-                             "QPushButton:hover{background:#eef0f2;}");
+            b->setStyleSheet("QPushButton{background:#fff;border:none;border-bottom:1px solid #EAE7DE;text-align:left;}"
+                             "QPushButton:hover{background:#F1EFE8;}");
             auto* bl = new QHBoxLayout(b);
             bl->setContentsMargins(10, 4, 10, 4);
             auto* tcol = new QVBoxLayout;
             tcol->setSpacing(1);
             auto* nm = new QLabel(r.name);
-            nm->setStyleSheet("font-weight:600;color:#2b2e33;");
+            nm->setStyleSheet("font-weight:600;color:#100A36;");
             auto* sb = new QLabel(r.sub);
-            sb->setStyleSheet("color:#868c95;font-size:8px;");
+            sb->setStyleSheet("color:#8A8779;font-size:8px;");
             tcol->addWidget(nm);
             tcol->addWidget(sb);
             bl->addLayout(tcol);
@@ -2001,13 +2008,13 @@ QWidget* LayoutWindow::buildRightPanel() {
         v->addWidget(hdLbl(QStringLiteral("预检 — 选中图")));
         pfBanner_ = new QLabel;
         pfBanner_->setWordWrap(true);
-        pfBanner_->setStyleSheet("background:#fbf2dd;border:1px solid #e6c878;border-radius:4px;"
-                                 "color:#8a6310;font-size:9px;padding:4px 7px;margin:4px 10px;");
+        pfBanner_->setStyleSheet("background:#FDF6D9;border:1px solid #E4C60F;border-radius:4px;"
+                                 "color:#6B5A00;font-size:9px;padding:4px 7px;margin:4px 10px;");
         v->addWidget(pfBanner_);
         auto pfRow = [&](const QString& t, bool ok) {
             auto* l = new QLabel((ok ? QStringLiteral("✓ ") : QStringLiteral("⚠ ")) + t);
             l->setStyleSheet(QStringLiteral("color:%1;font-size:10px;margin:0 12px;")
-                                 .arg(ok ? "#2f8c4f" : "#c2861a"));
+                                 .arg(ok ? "#2F9E6B" : "#B58900"));
             v->addWidget(l);
             return l;
         };
@@ -2037,7 +2044,7 @@ QWidget* LayoutWindow::buildRightPanel() {
         bh->setContentsMargins(10, 6, 10, 6);
         auto* ignore = new QPushButton(QStringLiteral("忽略并打印"));
         auto* fix = new QPushButton(QStringLiteral("✦ 自动修正"));
-        fix->setStyleSheet("background:#2e7dd7;color:#fff;border:none;border-radius:4px;padding:3px 10px;");
+        fix->setStyleSheet("background:#100A36;color:#FAFAF7;border:none;border-radius:4px;padding:3px 10px;");
         bh->addWidget(ignore);
         bh->addWidget(fix);
         v->addWidget(btns);
@@ -2072,12 +2079,12 @@ QWidget* LayoutWindow::buildTrafficLight() {
     auto* h = new QHBoxLayout(w);
     h->setContentsMargins(4, 2, 6, 2);
     h->setSpacing(4);
-    w->setStyleSheet("background:#fff;border:1px solid #d2d5d9;border-radius:5px;");
+    w->setStyleSheet("background:#fff;border:1px solid #DDD9CF;border-radius:5px;");
     struct D { const char* c; const char* tip; };
     const D dots[] = {{"#ff5f57", "离线"}, {"#febc2e", "手动开始"}, {"#28c840", "连线（自动）"}};
     auto* lbl = new QLabel(QStringLiteral("手动开始"));
     lbl->setObjectName("tlLbl");
-    lbl->setStyleSheet("font-size:8px;color:#6b7079;border:none;");
+    lbl->setStyleSheet("font-size:8px;color:#7A776D;border:none;");
     int i = 0;
     for (const auto& d : dots) {
         auto* b = new QToolButton;
@@ -2089,7 +2096,7 @@ QWidget* LayoutWindow::buildTrafficLight() {
         b->setStyleSheet(QStringLiteral(
             "QToolButton{border-radius:6px;background:%1;border:none;}"
             "QToolButton:!checked{background:%1;}"
-            "QToolButton:checked{border:2px solid #2b2e33;}").arg(d.c));
+            "QToolButton:checked{border:2px solid #100A36;}").arg(d.c));
         const QString tip = QString::fromUtf8(d.tip);
         connect(b, &QToolButton::clicked, this, [lbl, tip] { lbl->setText(tip); });
         h->addWidget(b);
@@ -2104,7 +2111,7 @@ QWidget* LayoutWindow::buildTrafficLight() {
 QWidget* LayoutWindow::buildJobStrip() {
     auto* bar = new QWidget;
     bar->setFixedHeight(62);
-    bar->setStyleSheet("background:#eef0f2;border-top:1px solid #d2d5d9;");
+    bar->setStyleSheet("background:#F1EFE8;border-top:1px solid #DDD9CF;");
     auto* h = new QHBoxLayout(bar);
     h->setContentsMargins(8, 5, 8, 5);
     h->setSpacing(6);
@@ -2121,7 +2128,7 @@ QWidget* LayoutWindow::buildJobStrip() {
         b->setText(QString::fromUtf8(thumbs[i].name).left(10));
         b->setStyleSheet(QStringLiteral(
             "QToolButton{background:%1;color:#fff;font-size:7px;border-radius:4px;border:2px solid transparent;}"
-            "QToolButton:checked{border:2px solid #2e7dd7;}").arg(thumbs[i].colour));
+            "QToolButton:checked{border:2px solid #0BBAEE;}").arg(thumbs[i].colour));
         connect(b, &QToolButton::clicked, this, [this, i] { canvas_->select(i); });
         connect(canvas_, &LayoutCanvas::selectionChanged, b,
                 [b, i](int s) { b->setChecked(s == i); });
@@ -2130,19 +2137,19 @@ QWidget* LayoutWindow::buildJobStrip() {
     auto* add = new QToolButton;
     add->setFixedSize(42, 50);
     add->setText(QStringLiteral("＋\n导入"));
-    add->setStyleSheet("QToolButton{border:1px dashed #b9c2cc;border-radius:4px;color:#2e7dd7;font-size:8px;}");
+    add->setStyleSheet("QToolButton{border:1px dashed #b9c2cc;border-radius:4px;color:#0BBAEE;font-size:8px;}");
     h->addWidget(add);
     h->addStretch();
-    auto* stat = new QLabel(QStringLiteral("5 张 · Photo Rag　|　利用率 <b style='color:#2f8c4f'>81%</b>"));
-    stat->setStyleSheet("font-size:9px;color:#6b7079;");
+    auto* stat = new QLabel(QStringLiteral("5 张 · Photo Rag　|　利用率 <b style='color:#2F9E6B'>81%</b>"));
+    stat->setStyleSheet("font-size:9px;color:#7A776D;");
     h->addWidget(stat);
     h->addWidget(buildTrafficLight());
     auto* queueN = new QLabel(QStringLiteral("队列 4"));
-    queueN->setStyleSheet("font-size:9px;color:#6b7079;");
+    queueN->setStyleSheet("font-size:9px;color:#7A776D;");
     h->addWidget(queueN);
     auto* print = new QPushButton(QStringLiteral("🖶 打印整版"));
     print->setToolTip(QStringLiteral("打印整版（5 张 · 当前纸张）"));
-    print->setStyleSheet("background:#2e7dd7;color:#fff;border:none;border-radius:4px;"
+    print->setStyleSheet("background:#100A36;color:#FAFAF7;border:none;border-radius:4px;"
                          "padding:6px 16px;font-weight:600;");
     connect(print, &QPushButton::clicked, this, [this] { submitLayoutToQueue(); });
     h->addWidget(print);
@@ -2153,15 +2160,15 @@ QWidget* LayoutWindow::buildJobStrip() {
 
 void LayoutWindow::buildStatusBar() {
     auto* sb = statusBar();
-    sb->setStyleSheet("QStatusBar{background:#eef0f2;border-top:1px solid #d2d5d9;font-size:9px;color:#6b7079;}"
-                      "QLabel{font-size:9px;color:#6b7079;}");
+    sb->setStyleSheet("QStatusBar{background:#F1EFE8;border-top:1px solid #DDD9CF;font-size:9px;color:#7A776D;}"
+                      "QLabel{font-size:9px;color:#7A776D;}");
     auto mk = [&](const QString& t, const QString& dot) {
         auto* l = new QLabel(QStringLiteral("<span style='color:%1'>●</span> %2").arg(dot, t));
         sb->addWidget(l);
         return l;
     };
-    mk(QStringLiteral("P9500 · 已连线"), "#2f8c4f");
-    mk(QStringLiteral("软打样 · 启用"), "#2f8c4f");
+    mk(QStringLiteral("P9500 · 已连线"), "#2F9E6B");
+    mk(QStringLiteral("软打样 · 启用"), "#2F9E6B");
     // calibration summary — engine-driven worst-of-modes
     QString worst;
     for (const auto& m : kModes)
@@ -2188,7 +2195,7 @@ void LayoutWindow::onSelectionChanged(int idx) {
         imgHd_->setText(b.name + ".tif");
         imgSize_->setText(QString::fromUtf8(info.size));
         imgIcc_->setText(QString::fromUtf8(info.icc));
-        imgIcc_->setStyleSheet(info.warn ? "color:#c2861a;font-weight:600;" : "color:#2b2e33;font-weight:600;");
+        imgIcc_->setStyleSheet(info.warn ? "color:#B58900;font-weight:600;" : "color:#100A36;font-weight:600;");
         imgDepth_->setText(QString::fromUtf8(info.depth));
         imgDpi_->setText(QString::fromUtf8(info.dpi));
         // reflect this image's mode in the 5-button group
@@ -2246,10 +2253,10 @@ void LayoutWindow::updatePreflight() {
     if (stale) {
         pfCal_->setText(QStringLiteral("⚠ %1 线性 %2 天 · 超 1 个月需检查")
                             .arg(QString::fromUtf8(m->name)).arg(m->days));
-        pfCal_->setStyleSheet("color:#c2861a;font-size:10px;");
+        pfCal_->setStyleSheet("color:#B58900;font-size:10px;");
     } else {
         pfCal_->setText(QStringLiteral("✓ 校准有效 · %1 天").arg(m->days));
-        pfCal_->setStyleSheet("color:#2f8c4f;font-size:10px;");
+        pfCal_->setStyleSheet("color:#2F9E6B;font-size:10px;");
     }
     pfCalFix_->setVisible(stale);
     if (warnChip_) warnChip_->setText(QStringLiteral("⚠ %1 警告").arg(n));

@@ -31,7 +31,7 @@
 namespace jcolour {
 
 namespace {
-constexpr const char* kAccent = "#2e7dd7";
+constexpr const char* kAccent = "#0BBAEE";
 
 struct StepDef { const char* title; const char* lead; const char* action; };
 const StepDef kStepDefs[] = {
@@ -52,18 +52,18 @@ const StepDef kStepDefs[] = {
 
 // edit-control style shared by the input panels.
 const char* kEdit =
-    "QLineEdit,QComboBox{border:1px solid #d2d5d9;border-radius:7px;padding:7px 10px;"
-    "font-size:12.5px;background:#fff;color:#23262b;}";
+    "QLineEdit,QComboBox{border:1px solid #DDD9CF;border-radius:7px;padding:7px 10px;"
+    "font-size:12.5px;background:#fff;color:#100A36;}";
 
 QLabel* fieldLabel(const QString& t) {
     auto* l = new QLabel(t);
-    l->setStyleSheet("font-size:12px;font-weight:600;color:#3b3f46;background:transparent;");
+    l->setStyleSheet("font-size:12px;font-weight:600;color:#4A4740;background:transparent;");
     return l;
 }
 }  // namespace
 
 CalibrationStepper::CalibrationStepper(QWidget* parent) : QWidget(parent) {
-    setStyleSheet("background:#f6f7f9;" + jcolour::theme::pageStyle());
+    setStyleSheet("background:#F6F4EE;" + jcolour::theme::pageStyle());
     auto* root = new QHBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
@@ -73,9 +73,9 @@ CalibrationStepper::CalibrationStepper(QWidget* parent) : QWidget(parent) {
     stepList_->setFixedWidth(258);
     stepList_->setFocusPolicy(Qt::NoFocus);
     stepList_->setStyleSheet(
-        "QListWidget{background:#fafafb;border:none;border-right:1px solid #d2d5d9;padding:12px 8px;}"
-        "QListWidget::item{padding:11px 9px;border-radius:8px;color:#3b3f46;}"
-        "QListWidget::item:selected{background:#eaf2fc;color:#1f5fa8;}");
+        "QListWidget{background:#FAFAF7;border:none;border-right:1px solid #DDD9CF;padding:12px 8px;}"
+        "QListWidget::item{padding:11px 9px;border-radius:8px;color:#4A4740;}"
+        "QListWidget::item:selected{background:#E7F7FD;color:#0A6E8C;}");
     connect(stepList_, &QListWidget::currentRowChanged, this, [this](int r){ if (r >= 0) showStep(r); });
     root->addWidget(stepList_);
 
@@ -96,10 +96,10 @@ CalibrationStepper::CalibrationStepper(QWidget* parent) : QWidget(parent) {
     rl->addSpacing(10);
 
     title_ = new QLabel;
-    title_->setStyleSheet("font-size:20px;font-weight:700;color:#23262b;background:transparent;");
+    title_->setStyleSheet("font-size:20px;font-weight:700;color:#100A36;background:transparent;");
     lead_ = new QLabel;
     lead_->setWordWrap(true);
-    lead_->setStyleSheet("font-size:13px;color:#868c95;background:transparent;");
+    lead_->setStyleSheet("font-size:13px;color:#8A8779;background:transparent;");
     rl->addWidget(title_);
     rl->addSpacing(5);
     rl->addWidget(lead_);
@@ -157,7 +157,7 @@ CalibrationStepper::CalibrationStepper(QWidget* parent) : QWidget(parent) {
                                 "Calibrite ColorChecker Studio"});
         l->addWidget(deviceCombo_);
         auto* hint = new QLabel(QStringLiteral("自動校準時用它讀數（量墨量、線性化、G7）。"));
-        hint->setStyleSheet("font-size:12px;color:#868c95;background:transparent;");
+        hint->setStyleSheet("font-size:12px;color:#8A8779;background:transparent;");
         l->addWidget(hint);
         l->addStretch();
         panels_->addWidget(w);
@@ -169,8 +169,9 @@ CalibrationStepper::CalibrationStepper(QWidget* parent) : QWidget(parent) {
         auto* l = new QVBoxLayout(w); l->setContentsMargins(0,0,0,0); l->setSpacing(12);
         actionBtn_ = new QPushButton;
         actionBtn_->setCursor(Qt::PointingHandCursor);
-        actionBtn_->setStyleSheet(QString("QPushButton{background:%1;color:#fff;border:none;border-radius:8px;"
-                                          "padding:10px 18px;font-size:13px;font-weight:600;}").arg(kAccent));
+        actionBtn_->setStyleSheet(
+            "QPushButton{background:#100A36;color:#FAFAF7;border:none;border-radius:8px;"
+            "padding:10px 18px;font-size:13px;font-weight:600;}");
         connect(actionBtn_, &QPushButton::clicked, this, &CalibrationStepper::doStepAction);
         result_ = new QLabel;
         result_->setWordWrap(true);
@@ -297,7 +298,7 @@ void CalibrationStepper::doStepAction() {
         stepDone_[step_] = true; updateStepList();
     };
     auto warn = [this](const QString& t) {
-        result_->setStyleSheet("font-size:12.5px;color:#8a6310;background:#fbf2dd;border-radius:8px;padding:10px 12px;");
+        result_->setStyleSheet("font-size:12.5px;color:#6B5A00;background:#fbf2dd;border-radius:8px;padding:10px 12px;");
         result_->setText(t); result_->setVisible(true);
     };
 
@@ -315,7 +316,7 @@ void CalibrationStepper::doStepAction() {
                 "3. 輸入實測值，系統算出走紙補償。\n"
                 "4. 目視檢查色條 / 灰塊均勻度 / 噴頭垂直線 / 進紙水平線。"));
             intro->setWordWrap(true);
-            intro->setStyleSheet("font-size:12.5px;color:#3b3f46;");
+            intro->setStyleSheet("font-size:12.5px;color:#4A4740;");
             dl->addWidget(intro);
 
             auto* printBtn = new QPushButton(QStringLiteral("  列印 GMG 測試圖（280mm）"));
@@ -347,7 +348,7 @@ void CalibrationStepper::doStepAction() {
             auto* spin = new QDoubleSpinBox;
             spin->setRange(270.0, 290.0); spin->setDecimals(2); spin->setSingleStep(0.25);
             spin->setValue(jcolour::paperfeed::kReferenceMm); spin->setSuffix(" mm");
-            spin->setStyleSheet("QDoubleSpinBox{border:1px solid #d2d5d9;border-radius:7px;"
+            spin->setStyleSheet("QDoubleSpinBox{border:1px solid #DDD9CF;border-radius:7px;"
                                 "padding:6px 8px;font-size:13px;background:#fff;}");
             mform->addRow(QStringLiteral("實測標尺長度"), spin);
             dl->addLayout(mform);
@@ -364,7 +365,7 @@ void CalibrationStepper::doStepAction() {
 
             auto* qc = new QCheckBox(QStringLiteral(
                 "目視檢查通過：四條色塊一致 · CMY 灰無條紋/色偏 · 垂直線(噴頭)與水平線(進紙)清晰無干涉紋"));
-            qc->setStyleSheet("font-size:12px;color:#3b3f46;");
+            qc->setStyleSheet("font-size:12px;color:#4A4740;");
             dl->addWidget(qc);
 
             dl->addStretch();
@@ -410,7 +411,7 @@ void CalibrationStepper::doStepAction() {
                 auto* done = new QPushButton(QStringLiteral("測量完成，繼續自動校準 ►"));
                 done->setEnabled(mw->complete());
                 done->setStyleSheet(
-                    "QPushButton{background:#2e7dd7;color:#fff;border:none;border-radius:7px;"
+                    "QPushButton{background:#0BBAEE;color:#fff;border:none;border-radius:7px;"
                     "padding:9px 16px;font-size:12.5px;font-weight:600;}"
                     "QPushButton:disabled{background:#b8c4d0;}");
                 connect(mw, &MeasureWidget::completed, done, [done] { done->setEnabled(true); });

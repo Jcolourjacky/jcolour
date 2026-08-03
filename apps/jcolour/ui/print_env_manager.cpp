@@ -25,10 +25,10 @@ struct ModeRow {
 // compute_state() thresholds (>30d soft, >90d hard).
 QString stateBadge(cal::CalibState s, int days, QString& colour) {
     switch (s) {
-        case cal::CalibState::FRESH:      colour = "#2f8c4f"; return QStringLiteral("✓ %1 天").arg(days);
-        case cal::CalibState::STALE_SOFT: colour = "#c2861a"; return QStringLiteral("%1 天 · 需检查").arg(days);
+        case cal::CalibState::FRESH:      colour = "#2F9E6B"; return QStringLiteral("✓ %1 天").arg(days);
+        case cal::CalibState::STALE_SOFT: colour = "#B58900"; return QStringLiteral("%1 天 · 需检查").arg(days);
         case cal::CalibState::STALE_HARD: colour = "#c0392b"; return QStringLiteral("%1 天 · 重做线性").arg(days);
-        default:                          colour = "#868c95"; return QStringLiteral("未校准");
+        default:                          colour = "#8A8779"; return QStringLiteral("未校准");
     }
 }
 
@@ -41,7 +41,7 @@ QLabel* mk(const QString& text, const QString& css = QString()) {
 QFrame* card() {
     auto* f = new QFrame;
     f->setObjectName("card");
-    f->setStyleSheet("QFrame#card{background:#fff;border:1px solid #d2d5d9;border-radius:8px;}");
+    f->setStyleSheet("QFrame#card{background:#fff;border:1px solid #DDD9CF;border-radius:8px;}");
     return f;
 }
 
@@ -63,8 +63,8 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
 
     // ---- header ----
     auto* hd = mk(QStringLiteral("打印环境管理器   ·   机 + 纸 + 线性化 + ICC + 总墨量 全部内嵌在一个环境里"),
-                  "padding:10px 14px;font-weight:700;color:#23262b;"
-                  "background:#ececee;border-bottom:1px solid #d2d5d9;");
+                  "padding:10px 14px;font-weight:700;color:#100A36;"
+                  "background:#ececee;border-bottom:1px solid #DDD9CF;");
     root->addWidget(hd);
 
     auto* body = new QHBoxLayout;
@@ -75,7 +75,7 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
     // ---- left: environment list ----
     auto* left = new QWidget;
     left->setFixedWidth(236);
-    left->setStyleSheet("background:#eef0f2;border-right:1px solid #d2d5d9;");
+    left->setStyleSheet("background:#F1EFE8;border-right:1px solid #DDD9CF;");
     auto* ll = new QVBoxLayout(left);
     ll->setContentsMargins(8, 8, 8, 8);
     ll->setSpacing(6);
@@ -102,9 +102,9 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
     body->addWidget(right, 1);
 
     rl->addWidget(mk(QStringLiteral("Epson SC-P9500 · Hahnemühle Photo Rag 308"),
-                     "font-size:13px;font-weight:700;color:#23262b;"));
+                     "font-size:13px;font-weight:700;color:#100A36;"));
     rl->addWidget(mk(QStringLiteral("墨批 #A7 · 这台机 ＋ 这种纸 的校准"),
-                     "font-size:10px;color:#6b7079;"));
+                     "font-size:10px;color:#7A776D;"));
 
     // base calibration card
     {
@@ -121,9 +121,9 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
         };
         for (auto& r : rows) {
             auto* rw = new QHBoxLayout;
-            rw->addWidget(mk(QString::fromUtf8(r[0]), "font-size:10px;color:#6b7079;border:none;background:transparent;"));
+            rw->addWidget(mk(QString::fromUtf8(r[0]), "font-size:10px;color:#7A776D;border:none;background:transparent;"));
             rw->addStretch(1);
-            rw->addWidget(mk(QString::fromUtf8(r[1]), "font-size:10px;color:#2f8c4f;border:none;background:transparent;"));
+            rw->addWidget(mk(QString::fromUtf8(r[1]), "font-size:10px;color:#2F9E6B;border:none;background:transparent;"));
             cl->addLayout(rw);
         }
         rl->addWidget(c);
@@ -158,11 +158,11 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
 
             auto* rw = new QHBoxLayout;
             rw->setSpacing(8);
-            auto* nm = mk(m.name, "font-size:10.5px;font-weight:700;color:#23262b;border:none;background:transparent;");
+            auto* nm = mk(m.name, "font-size:10.5px;font-weight:700;color:#100A36;border:none;background:transparent;");
             nm->setFixedWidth(62);
             rw->addWidget(nm);
             rw->addWidget(mk(QStringLiteral("<b>%1</b> · %2").arg(m.lin, m.depth),
-                             "font-size:9.5px;color:#6b7079;border:none;background:transparent;"), 1);
+                             "font-size:9.5px;color:#7A776D;border:none;background:transparent;"), 1);
             rw->addWidget(mk(badge, QString("font-size:9px;font-weight:700;color:%1;border:none;background:transparent;").arg(colour)));
             auto* chk = new QPushButton(QStringLiteral("检查"));
             chk->setFixedHeight(20);
@@ -173,12 +173,12 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
             auto* lw = new QVBoxLayout(line);
             lw->setContentsMargins(0, 5, 0, 5);
             lw->addLayout(rw);
-            line->setStyleSheet("QFrame{border:none;border-bottom:1px solid #e6e8eb;}");
+            line->setStyleSheet("QFrame{border:none;border-bottom:1px solid #EAE7DE;}");
             cl->addWidget(line);
         }
         cl->addWidget(mk(QStringLiteral("每条线性曲线<b>绑定分辨率＋方向</b>，写进名字（如 单黑·1440×720·单向）。"
                                         "选中哪条就用那套参数打印。超过 <b>1 个月</b>未用先「检查」（主要查线性），不行就重做线性。"),
-                         "font-size:9px;color:#6b7079;border:none;background:transparent;"));
+                         "font-size:9px;color:#7A776D;border:none;background:transparent;"));
         rl->addWidget(c);
     }
 
@@ -219,7 +219,7 @@ void PrintEnvironmentManager::rebuildEnvList() {
     const auto configs = PaperState::instance().listConfigs();
     if (configs.isEmpty()) {
         listLayout_->addWidget(mk(QStringLiteral("尚无打印环境。\n点上方「新建 / 校准向导」建立第一个。"),
-            "font-size:10px;color:#868c95;border:none;background:transparent;padding:6px 2px;"));
+            "font-size:10px;color:#8A8779;border:none;background:transparent;padding:6px 2px;"));
         return;
     }
     const cal::Timestamp now = QDateTime::currentSecsSinceEpoch();
@@ -239,14 +239,14 @@ void PrintEnvironmentManager::rebuildEnvList() {
 
         auto* it = new QFrame;
         it->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:6px;}")
-                              .arg(first ? "#eaf2fc" : "#ffffff", first ? "#bcd4f2" : "#e2e4e7"));
+                              .arg(first ? "#E7F7FD" : "#ffffff", first ? "#bcd4f2" : "#e2e4e7"));
         auto* il = new QVBoxLayout(it);
         il->setContentsMargins(8, 6, 8, 6);
         il->setSpacing(1);
         il->addWidget(mk(QStringLiteral("%1 · %2").arg(c.printer, c.paperName),
-            "font-size:11px;font-weight:700;color:#23262b;border:none;background:transparent;"));
+            "font-size:11px;font-weight:700;color:#100A36;border:none;background:transparent;"));
         il->addWidget(mk(QStringLiteral("%1 · 墨批 %2 · v%3").arg(c.paperMeta, c.inkBatch).arg(c.version),
-            "font-size:9px;color:#6b7079;border:none;background:transparent;"));
+            "font-size:9px;color:#7A776D;border:none;background:transparent;"));
         il->addWidget(mk(badge,
             QString("font-size:9px;font-weight:600;color:%1;border:none;background:transparent;").arg(colour)));
         listLayout_->addWidget(it);

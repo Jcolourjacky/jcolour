@@ -111,7 +111,7 @@ QSize MeasureChartArea::minimumSizeHint() const {
 
 void MeasureChartArea::paintEvent(QPaintEvent*) {
     QPainter pt(this);
-    pt.fillRect(rect(), QColor("#ededed"));
+    pt.fillRect(rect(), QColor("#F1EFE8"));
     const int patchW = (width() - kNumW - kStW - 8) / w_->nPatches_;
 
     for (int si = 0; si < w_->nStrips_; ++si) {
@@ -123,13 +123,13 @@ void MeasureChartArea::paintEvent(QPaintEvent*) {
         if (st.state == MeasureStripState::S::Failed)
             pt.fillRect(row, QColor("#fbe8e8"));
         if (si == w_->cur_) {
-            pt.fillRect(row, QColor("#ddebfa"));
-            pt.setPen(QPen(QColor("#2e7dd7"), 1.5));
+            pt.fillRect(row, QColor("#E7F7FD"));
+            pt.setPen(QPen(QColor("#0BBAEE"), 1.5));
             pt.drawRect(row.adjusted(0, 0, -1, -1));
         }
 
         // 序号
-        pt.setPen(si == w_->cur_ ? QColor("#1f5fa8") : QColor("#888"));
+        pt.setPen(si == w_->cur_ ? QColor("#0A6E8C") : QColor("#888"));
         pt.drawText(QRect(4, y, kNumW - 4, kRowH), Qt::AlignVCenter | Qt::AlignRight,
                     QString("%1").arg(si + 1, 2, 10, QChar('0')));
 
@@ -148,7 +148,7 @@ void MeasureChartArea::paintEvent(QPaintEvent*) {
         if (st.state == MeasureStripState::S::Ok)
             pt.drawText(QRect(stx, y, kStW - 4, kRowH), Qt::AlignCenter, QStringLiteral("✓"));
         else if (st.state == MeasureStripState::S::Reading) {
-            pt.setPen(QColor("#2e7dd7"));
+            pt.setPen(QColor("#0BBAEE"));
             pt.drawText(QRect(stx, y, kStW - 4, kRowH), Qt::AlignCenter, QStringLiteral("…"));
         } else if (st.state == MeasureStripState::S::Failed) {
             pt.setPen(QColor("#d42020"));
@@ -229,8 +229,8 @@ MeasureWidget::MeasureWidget(const QString& chartId, int strips, int patchesPerS
 
     inspect_ = new QLabel;
     inspect_->setStyleSheet(
-        "font-size:11px;font-family:Menlo,monospace;color:#3b3f46;background:#fff;"
-        "border:1px solid #d2d5d9;border-radius:6px;padding:5px 10px;");
+        "font-size:11px;font-family:Menlo,monospace;color:#4A4740;background:#fff;"
+        "border:1px solid #DDD9CF;border-radius:6px;padding:5px 10px;");
     inspect_->setVisible(false);
     l->addWidget(inspect_);
 
@@ -248,7 +248,7 @@ MeasureWidget::MeasureWidget(const QString& chartId, int strips, int patchesPerS
     readBtn_ = new QPushButton;
     readBtn_->setCursor(Qt::PointingHandCursor);
     readBtn_->setStyleSheet(
-        "QPushButton{background:#2e7dd7;color:#fff;border:none;border-radius:7px;"
+        "QPushButton{background:#0BBAEE;color:#fff;border:none;border-radius:7px;"
         "padding:9px 16px;font-size:12.5px;font-weight:600;}"
         "QPushButton:disabled{background:#b8c4d0;}");
     connect(readBtn_, &QPushButton::clicked, this, &MeasureWidget::readCurrent);
