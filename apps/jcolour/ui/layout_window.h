@@ -21,6 +21,7 @@
 
 class QComboBox;
 class QLabel;
+class QTextEdit;
 class QStackedWidget;
 class QTabWidget;
 class QDoubleSpinBox;
@@ -56,7 +57,8 @@ public:
     int  selected() const { return sel_; }
     void select(int idx);
 
-    void setTool(CanvasTool t) { tool_ = t; }
+    void setTool(CanvasTool t);          // 切工具（提交进行中的文字编辑并发 toolChanged）
+    CanvasTool tool() const { return tool_; }
 
     void zoomBy(int deltaPercent);   // ±10 …
     void zoomFit();
@@ -79,12 +81,22 @@ public:
     void clearGuides()   { guidesV_.clear(); guidesH_.clear(); update(); }
     void addGuideV(double mm) { guidesV_.push_back(mm); update(); }
     void addGuideH(double mm) { guidesH_.push_back(mm); update(); }
+    void toggleGuides()  { showGuides_ = !showGuides_; update(); }   // Cmd+;
+
+    // InDesign「编辑 > 多重复制」：以选中块为原点铺 行×列（含间距）
+    void stepRepeatGrid(int rows, int cols, double gapXmm, double gapYmm);
+    // 光标锚定缩放（Ctrl+滚轮 / 捏合都锚在光标下的点）
+    void zoomAtBy(const QPointF& anchorPx, int deltaPercent);
+    // InDesign 式文字框编辑（拖框建立 → 框内直接输入；双击再编辑）
+    void startTextEdit(int idx);
+    void finishTextEdit(bool commit);
 
 signals:
     void selectionChanged(int idx);  // -1 = none
     void blockMoved(int idx);        // moved or resized
     void blockAdded(int idx);        // text / QR tool inserted a block
     void toolFinished();             // insert tool done → revert to select
+    void toolChanged(CanvasTool t);  // 键盘 V/T/H/K 或代码切换 → 工具条同步选中态
     void zoomChanged(int percent);
 
 protected:
@@ -96,7 +108,10 @@ protected:
     bool event(QEvent*) override;    // 触控板捏合缩放 (ZoomNativeGesture)
     void resizeEvent(QResizeEvent*) override;
     void contextMenuEvent(QContextMenuEvent*) override;   // 标尺右键：单位/清参考线
-    void keyPressEvent(QKeyEvent*) override;              // Delete 删除 · Cmd+D 复制
+    void keyPressEvent(QKeyEvent*) override;              // V/T/H/K 切工具 · 空格临时抓手 · Delete
+    void keyReleaseEvent(QKeyEvent*) override;            // 空格抬起还原工具
+    void mouseDoubleClickEvent(QMouseEvent*) override;    // 双击标尺加参考线 · 双击文字块编辑
+    bool eventFilter(QObject*, QEvent*) override;         // 文字编辑框失焦/Esc 提交
 
 private:
     QRectF  paperRectPx() const;
@@ -126,6 +141,18 @@ private:
     QPointF measA_, measB_;               // mm
     QPointF panLast_;                     // 抓手拖动
     bool    panning_ = false;
+    bool    showGuides_ = true;
+
+    // 空格临时抓手（InDesign/Photoshop 通用手势）
+    bool       spacePan_ = false;
+    CanvasTool prevTool_ = CanvasTool::Select;
+
+    // InDesign 式文字框
+    bool    creatingText_ = false;
+    QPointF textStartMm_;
+    QRectF  textDragMm_;
+    QTextEdit* editor_ = nullptr;
+    int     editBlock_ = -1;
     double scroll_ = 0.0;    // px
     bool   dragging_ = false;
     int    resizing_ = -1;   // active handle index, -1 = not resizing

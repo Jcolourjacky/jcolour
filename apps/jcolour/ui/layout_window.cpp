@@ -11,6 +11,9 @@
 
 #include <QInputDialog>
 #include <QDialog>
+#include <QTextEdit>
+#include <QFormLayout>
+#include <QDialogButtonBox>
 
 #include <QApplication>
 #include <QMenuBar>
@@ -199,6 +202,7 @@ int LayoutCanvas::zoomPercent() const {
 }
 
 void LayoutCanvas::zoomBy(int dp) {
+    finishTextEdit(true);
     double z = (zoom_ > 0 ? zoom_ : 0.8) / 0.8 * 100.0 + dp;
     z = qBound(10.0, z, 300.0);
     zoom_ = z / 100.0 * 0.8;
@@ -363,8 +367,16 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
         }
     }
 
-    // 参考线（InDesign 青色，横竖贯穿画布内容区）
-    if (!guidesV_.isEmpty() || !guidesH_.isEmpty()) {
+    // 文字框拖拽预览（虚线框）
+    if (creatingText_ && textDragMm_.isValid()) {
+        g.setPen(QPen(QColor("#2e7dd7"), 1, Qt::DashLine));
+        g.setBrush(Qt::NoBrush);
+        g.drawRect(QRectF(p.x() + textDragMm_.x() * s, p.y() + textDragMm_.y() * s,
+                          textDragMm_.width() * s, textDragMm_.height() * s));
+    }
+
+    // 参考线（InDesign 青色，横竖贯穿画布内容区；Cmd+; 显隐）
+    if (showGuides_ && (!guidesV_.isEmpty() || !guidesH_.isEmpty())) {
         g.setPen(QPen(QColor("#37b6f0"), 1));
         for (double gm : guidesV_) {
             const double x = p.x() + gm * s;
@@ -496,6 +508,7 @@ void LayoutCanvas::mousePressEvent(QMouseEvent* e) {
 
     // ---- 抓手平移 ----
     if (tool_ == CanvasTool::Hand) {
+        finishTextEdit(true);
         panning_ = true; panLast_ = pos;
         setCursor(Qt::ClosedHandCursor);
         return;
@@ -522,21 +535,23 @@ void LayoutCanvas::mousePressEvent(QMouseEvent* e) {
             }
     }
 
-    // ---- insert tools: 文字 / 二维码 click-to-place ----
-    if (tool_ == CanvasTool::Text || tool_ == CanvasTool::Qr) {
+    // ---- 文字工具：InDesign 式拖拽建文本框（松手后框内直接输入）----
+    if (tool_ == CanvasTool::Text) {
+        const QPointF mm = pxToMm(pos);
+        if (mm.x() >= 0 && mm.x() <= kPaperW && mm.y() >= 0 && mm.y() <= kPaperH) {
+            creatingText_ = true;
+            textStartMm_ = mm;
+            textDragMm_ = QRectF(mm, mm);
+        }
+        return;
+    }
+
+    // ---- insert tools: 二维码 click-to-place ----
+    if (tool_ == CanvasTool::Qr) {
         const QPointF mm = pxToMm(pos);
         if (mm.x() >= 0 && mm.x() <= kPaperW && mm.y() >= 0 && mm.y() <= kPaperH) {
             CanvasBlock b;
-            if (tool_ == CanvasTool::Text) {
-                bool ok = false;
-                const QString t = QInputDialog::getText(
-                    this, QStringLiteral("加入文字"), QStringLiteral("文字内容："),
-                    QLineEdit::Normal, QStringLiteral("展览标题 2026"), &ok);
-                if (!ok || t.isEmpty()) { tool_ = CanvasTool::Select; emit toolFinished(); return; }
-                b.isText = true; b.text = t;
-                b.w = qMin(kPaperW * 0.6, 22.0 + t.size() * 14.0); b.h = 34;
-                b.name = QStringLiteral("文字");
-            } else {
+            {
                 bool ok = false;
                 const QString d = QInputDialog::getText(
                     this, QStringLiteral("加入二维码"), QStringLiteral("二维码内容（URL / 文本）："),
@@ -589,6 +604,14 @@ void LayoutCanvas::mouseMoveEvent(QMouseEvent* e) {
     cursorPx_ = pos;                       // 标尺光标位置指示
     if (showRulers_) update();
 
+    // ---- 文字框拖拽中（虚线预览）----
+    if (creatingText_) {
+        const QPointF mm = pxToMm(pos);
+        textDragMm_ = QRectF(textStartMm_, mm).normalized()
+                          .intersected(QRectF(0, 0, kPaperW, kPaperH));
+        update(); return;
+    }
+
     // ---- 参考线拖动中 ----
     if (dragGuideKind_ != 0) {
         const QPointF mm = pxToMm(pos);
@@ -606,9 +629,16 @@ void LayoutCanvas::mouseMoveEvent(QMouseEvent* e) {
         clampScroll(); update(); return;
     }
 
-    // ---- 测量中 ----
+    // ---- 测量中（Shift 锁 0°/45°/90°，InDesign 同款）----
     if (measuring_) {
         measB_ = pxToMm(pos);
+        if (e->modifiers() & Qt::ShiftModifier) {
+            const double dx = measB_.x() - measA_.x(), dy = measB_.y() - measA_.y();
+            const double ang = std::atan2(dy, dx);
+            const double snap = std::round(ang / (M_PI / 4)) * (M_PI / 4);
+            const double len = std::hypot(dx, dy);
+            measB_ = measA_ + QPointF(len * std::cos(snap), len * std::sin(snap));
+        }
         update(); return;
     }
 
@@ -673,6 +703,27 @@ void LayoutCanvas::mouseMoveEvent(QMouseEvent* e) {
 }
 
 void LayoutCanvas::mouseReleaseEvent(QMouseEvent* e) {
+    // 文字框建立：拖出的矩形即文本框；几乎没拖动 = 默认 90×22mm（InDesign 单击习惯）
+    if (creatingText_) {
+        creatingText_ = false;
+        QRectF r = textDragMm_;
+        textDragMm_ = QRectF();
+        if (r.width() < 8 || r.height() < 6)
+            r = QRectF(qBound(0.0, textStartMm_.x(), kPaperW - 90.0),
+                       qBound(0.0, textStartMm_.y(), kPaperH - 22.0), 90, 22);
+        CanvasBlock b;
+        b.isText = true;
+        b.text.clear();
+        b.name = QStringLiteral("文字");
+        b.x = r.x(); b.y = r.y(); b.w = r.width(); b.h = r.height();
+        blocks_.push_back(b);
+        sel_ = blocks_.size() - 1;
+        update();
+        emit blockAdded(sel_);
+        emit selectionChanged(sel_);
+        startTextEdit(sel_);          // InDesign：建框即进入输入状态
+        return;
+    }
     // 参考线：拖回标尺 = 删除（InDesign 行为）
     if (dragGuideKind_ != 0) {
         const QPointF pos = e->position();
@@ -691,12 +742,149 @@ void LayoutCanvas::mouseReleaseEvent(QMouseEvent* e) {
     dragging_ = false; resizing_ = -1;
 }
 
+void LayoutCanvas::setTool(CanvasTool t) {
+    finishTextEdit(true);
+    tool_ = t;
+    setCursor(t == CanvasTool::Hand ? Qt::OpenHandCursor
+              : t == CanvasTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+    emit toolChanged(t);
+}
+
+void LayoutCanvas::startTextEdit(int idx) {
+    if (idx < 0 || idx >= blocks_.size() || !blocks_[idx].isText) return;
+    finishTextEdit(true);
+    editBlock_ = idx;
+    editor_ = new QTextEdit(this);
+    const QRectF r = blockRectPx(blocks_[idx]);
+    editor_->setGeometry(r.toRect());
+    QFont f = font();
+    f.setPointSizeF(qMax(7.0, r.height() * 0.42));
+    f.setBold(true);
+    editor_->setFont(f);
+    editor_->setPlainText(blocks_[idx].text);
+    editor_->setStyleSheet(
+        "QTextEdit{background:rgba(255,255,255,235);color:#2b2e33;"
+        "border:1px solid #2e7dd7;border-radius:0;padding:0;}");
+    editor_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    editor_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    editor_->installEventFilter(this);
+    editor_->show();
+    editor_->setFocus();
+    editor_->moveCursor(QTextCursor::End);
+}
+
+void LayoutCanvas::finishTextEdit(bool commit) {
+    if (!editor_) return;
+    QTextEdit* ed = editor_;
+    editor_ = nullptr;                      // 先置空防重入（focusOut 会再触发）
+    const int idx = editBlock_;
+    editBlock_ = -1;
+    if (idx >= 0 && idx < blocks_.size() && blocks_[idx].isText) {
+        const QString t = ed->toPlainText();
+        if (commit && !t.trimmed().isEmpty()) {
+            blocks_[idx].text = t;
+        } else if (blocks_[idx].text.isEmpty()) {
+            blocks_.remove(idx);            // 空文本框 = 取消（InDesign 同款）
+            if (sel_ == idx) sel_ = -1;
+            emit selectionChanged(sel_);
+        }
+    }
+    ed->deleteLater();
+    setFocus();
+    update();
+}
+
+bool LayoutCanvas::eventFilter(QObject* obj, QEvent* ev) {
+    if (obj == editor_) {
+        if (ev->type() == QEvent::FocusOut) { finishTextEdit(true); return false; }
+        if (ev->type() == QEvent::KeyPress) {
+            auto* ke = static_cast<QKeyEvent*>(ev);
+            if (ke->key() == Qt::Key_Escape) { finishTextEdit(true); return true; }
+        }
+    }
+    return QWidget::eventFilter(obj, ev);
+}
+
+void LayoutCanvas::zoomAtBy(const QPointF& anchorPx, int dp) {
+    const QPointF mm = pxToMm(anchorPx);
+    zoomBy(dp);
+    // 让锚点下的纸面位置保持在光标下（InDesign/所有排版软件的缩放手感）
+    const QRectF p = paperRectPx();
+    const double s = p.width() / kPaperW;
+    scrollX_ += anchorPx.x() - (p.x() + mm.x() * s);
+    scroll_  -= anchorPx.y() - (p.y() + mm.y() * s);
+    clampScroll();
+    update();
+}
+
+void LayoutCanvas::stepRepeatGrid(int rows, int cols, double gapXmm, double gapYmm) {
+    if (sel_ < 0 || sel_ >= blocks_.size()) return;
+    const CanvasBlock src = blocks_[sel_];
+    for (int r = 0; r < rows; ++r)
+        for (int c = 0; c < cols; ++c) {
+            if (r == 0 && c == 0) continue;             // 原块即 (0,0)
+            CanvasBlock b = src;
+            b.x = src.x + c * (src.w + gapXmm);
+            b.y = src.y + r * (src.h + gapYmm);
+            if (b.x + b.w > kPaperW + 0.01 || b.y + b.h > kPaperH + 0.01) continue;  // 出纸不放
+            blocks_.push_back(b);
+        }
+    sel_ = blocks_.size() - 1;
+    update();
+    emit blockAdded(sel_);
+    emit selectionChanged(sel_);
+}
+
 void LayoutCanvas::keyPressEvent(QKeyEvent* e) {
+    // 空格按住 = 临时抓手（InDesign/Photoshop 通用）
+    if (e->key() == Qt::Key_Space && !e->isAutoRepeat() && !spacePan_ && !editor_) {
+        spacePan_ = true;
+        prevTool_ = tool_;
+        tool_ = CanvasTool::Hand;
+        setCursor(Qt::OpenHandCursor);
+        return;
+    }
+    // 单键工具切换（InDesign：V 选择 · T 文字 · H 抓手 · K 测量）
+    if (!editor_ && e->modifiers() == Qt::NoModifier) {
+        switch (e->key()) {
+            case Qt::Key_V: setTool(CanvasTool::Select);  return;
+            case Qt::Key_T: setTool(CanvasTool::Text);    return;
+            case Qt::Key_H: setTool(CanvasTool::Hand);    return;
+            case Qt::Key_K: setTool(CanvasTool::Measure); return;
+            default: break;
+        }
+    }
     if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) { deleteSelected(); return; }
-    if (e->matches(QKeySequence::StandardKey(QKeySequence::SelectAll))) { /* 保留 */ }
     if ((e->modifiers() & Qt::ControlModifier) && e->key() == Qt::Key_D) { duplicateSelected(); return; }
     if (e->key() == Qt::Key_Escape && hasMeasure_) { hasMeasure_ = false; update(); return; }
     QWidget::keyPressEvent(e);
+}
+
+void LayoutCanvas::keyReleaseEvent(QKeyEvent* e) {
+    if (e->key() == Qt::Key_Space && !e->isAutoRepeat() && spacePan_) {
+        spacePan_ = false;
+        panning_ = false;
+        tool_ = prevTool_;
+        setCursor(tool_ == CanvasTool::Hand ? Qt::OpenHandCursor
+                  : tool_ == CanvasTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+        return;
+    }
+    QWidget::keyReleaseEvent(e);
+}
+
+void LayoutCanvas::mouseDoubleClickEvent(QMouseEvent* e) {
+    const QPointF pos = e->position();
+    // 双击标尺 = 在该处加参考线（InDesign：顶标尺加竖线，左标尺加横线）
+    if (showRulers_ && pos.y() < kRuler && pos.x() >= kRuler) { addGuideV(pxToMm(pos).x()); return; }
+    if (showRulers_ && pos.x() < kRuler && pos.y() >= kRuler) { addGuideH(pxToMm(pos).y()); return; }
+    // 双击文字块 = 进入编辑（InDesign：选择工具双击进入文字编辑）
+    for (int i = blocks_.size() - 1; i >= 0; --i)
+        if (blocks_[i].isText && blockRectPx(blocks_[i]).contains(pos)) {
+            select(i);
+            startTextEdit(i);
+            return;
+        }
+    QWidget::mouseDoubleClickEvent(e);
 }
 
 void LayoutCanvas::contextMenuEvent(QContextMenuEvent* e) {
@@ -718,8 +906,9 @@ void LayoutCanvas::contextMenuEvent(QContextMenuEvent* e) {
 }
 
 void LayoutCanvas::wheelEvent(QWheelEvent* e) {
+    finishTextEdit(true);
     if (e->modifiers() & Qt::ControlModifier) {
-        zoomBy(e->angleDelta().y() > 0 ? 10 : -10);
+        zoomAtBy(e->position(), e->angleDelta().y() > 0 ? 10 : -10);   // 锚定光标
     } else {
         scroll_  -= e->angleDelta().y() * 0.6;
         scrollX_ += e->angleDelta().x() * 0.6;   // 触控板横向双指
@@ -796,7 +985,7 @@ bool LayoutCanvas::event(QEvent* e) {
     if (e->type() == QEvent::NativeGesture) {
         auto* g = static_cast<QNativeGestureEvent*>(e);
         if (g->gestureType() == Qt::ZoomNativeGesture) {
-            zoomBy(int(g->value() * 100));
+            zoomAtBy(g->position(), int(g->value() * 100));   // 捏合锚定指下
             return true;
         }
     }
@@ -900,6 +1089,10 @@ void LayoutWindow::buildMenus() {
     view->addAction(QStringLiteral("适合窗口"), QKeySequence(QStringLiteral("Ctrl+0")),
                     [this] { canvas_->zoomFit(); });
     view->addSeparator();
+    view->addAction(QStringLiteral("显示/隐藏参考线"), QKeySequence(QStringLiteral("Ctrl+;")),
+                    [this] { canvas_->toggleGuides(); });
+    view->addAction(QStringLiteral("显示/隐藏标尺"), QKeySequence(QStringLiteral("Ctrl+R")),
+                    [this] { canvas_->toggleRulers(); });
     view->addAction(QStringLiteral("软打样"))->setCheckable(true);
     view->addAction(QStringLiteral("色域警告"))->setCheckable(true);
 
@@ -1171,30 +1364,40 @@ QWidget* LayoutWindow::buildToolbox() {
         return b;
     };
 
-    // ── 工具（互斥选中）──
-    selectToolBtn_ = add(ic::Icon::Cursor, QStringLiteral("选择 / 移动"), true,
+    // ── 工具（互斥选中；V/T/H/K 单键切换与按钮双向同步）──
+    selectToolBtn_ = add(ic::Icon::Cursor, QStringLiteral("选择 / 移动 (V)"), true,
         [this] { canvas_->setTool(CanvasTool::Select); });
     selectToolBtn_->setChecked(true);
-    add(ic::Icon::Type, QStringLiteral("文字"), true, [this] {
+    auto* textBtn = add(ic::Icon::Type, QStringLiteral("文字 (T) — 像 InDesign 一样拖出文本框直接输入"), true, [this] {
         canvas_->setTool(CanvasTool::Text);
-        statusBar()->showMessage(QStringLiteral("文字工具：在纸张上点击放置文字"), 4000); });
-    add(ic::Icon::QrCode, QStringLiteral("二维码 / 条码"), true, [this] {
+        statusBar()->showMessage(QStringLiteral("文字工具：在纸上拖出文本框，松手直接输入；双击已有文字可再编辑"), 5000); });
+    auto* qrBtn = add(ic::Icon::QrCode, QStringLiteral("二维码 / 条码"), true, [this] {
         canvas_->setTool(CanvasTool::Qr);
         statusBar()->showMessage(QStringLiteral("二维码工具：在纸张上点击放置二维码"), 4000); });
-    add(ic::Icon::Hand, QStringLiteral("抓手平移（缩放后拖动画布）"), true, [this] {
+    auto* handBtn = add(ic::Icon::Hand, QStringLiteral("抓手平移 (H · 按住空格临时切换)"), true, [this] {
         canvas_->setTool(CanvasTool::Hand); });
-    add(ic::Icon::Measure, QStringLiteral("测量（拖一条线读距离，Esc 清除）"), true, [this] {
+    auto* measBtn = add(ic::Icon::Measure, QStringLiteral("测量 (K · Shift 锁 45°，Esc 清除)"), true, [this] {
         canvas_->setTool(CanvasTool::Measure);
         statusBar()->showMessage(QStringLiteral("测量工具：在纸上拖动读取 mm 距离与 Δx/Δy"), 4000); });
+    {
+        const std::array<QToolButton*, 5> tb{selectToolBtn_, textBtn, qrBtn, handBtn, measBtn};
+        connect(canvas_, &LayoutCanvas::toolChanged, this, [tb](CanvasTool t) {
+            const int i = t == CanvasTool::Select ? 0 : t == CanvasTool::Text ? 1
+                        : t == CanvasTool::Qr ? 2 : t == CanvasTool::Hand ? 3 : 4;
+            tb[size_t(i)]->setChecked(true);
+        });
+    }
 
     // ── 块操作 ──
     sep();
     add(ic::Icon::Copy, QStringLiteral("复制选中块 (Cmd+D)"), false, [this] { canvas_->duplicateSelected(); });
-    add(ic::Icon::Copies, QStringLiteral("份数… 同图打 N 份（配合自动拼版）"), false, [this] {
+    add(ic::Icon::Copies, QStringLiteral("份数… 同图打 N 份并自动排版（ImagePrint 方式）"), false, [this] {
         bool ok = false;
         const int n = QInputDialog::getInt(this, QStringLiteral("份数"),
-            QStringLiteral("再复制多少份？（之后可点「自动拼版」归位）"), 3, 1, 99, 1, &ok);
-        if (ok) canvas_->duplicateSelectedN(n); });
+            QStringLiteral("再复制多少份？（复制后自动拼版归位）"), 3, 1, 99, 1, &ok);
+        if (!ok) return;
+        canvas_->duplicateSelectedN(n);
+        runAutoNest(); });                    // ImagePrint：设份数即自动排列
     add(ic::Icon::RotateCw, QStringLiteral("旋转 90°（省纸拼版常用）"), false, [this] { canvas_->rotateSelected90(); });
     add(ic::Icon::Trash, QStringLiteral("删除选中块"), false, [this] { canvas_->deleteSelected(); });
     {
@@ -1215,10 +1418,28 @@ QWidget* LayoutWindow::buildToolbox() {
     // ── 拼版 ──
     sep();
     add(ic::Icon::Grid, QStringLiteral("自动拼版 / 嵌套"), false, [this] { runAutoNest(); });
-    add(ic::Icon::StepRepeat, QStringLiteral("步进重复 Step && Repeat…"), false, [this] {
-        auto* dlg = new StepRepeatDialog(this);
-        dlg->setAttribute(Qt::WA_DeleteOnClose);
-        dlg->show(); });
+    add(ic::Icon::StepRepeat, QStringLiteral("步进重复…（InDesign「多重复制」方式：作用于选中块）"), false, [this] {
+        if (canvas_->selected() < 0) {
+            statusBar()->showMessage(QStringLiteral("步进重复：请先选中一个块"), 4000);
+            return;
+        }
+        QDialog dlg(this);
+        dlg.setWindowTitle(QStringLiteral("步进重复（多重复制）"));
+        auto* form = new QFormLayout(&dlg);
+        auto* rows = new QSpinBox; rows->setRange(1, 30); rows->setValue(2);
+        auto* cols = new QSpinBox; cols->setRange(1, 30); cols->setValue(3);
+        auto* gx = new QDoubleSpinBox; gx->setRange(0, 200); gx->setValue(5); gx->setSuffix(" mm");
+        auto* gy = new QDoubleSpinBox; gy->setRange(0, 200); gy->setValue(5); gy->setSuffix(" mm");
+        form->addRow(QStringLiteral("行数"), rows);
+        form->addRow(QStringLiteral("列数"), cols);
+        form->addRow(QStringLiteral("水平间距"), gx);
+        form->addRow(QStringLiteral("垂直间距"), gy);
+        auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+        connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+        form->addRow(bb);
+        if (dlg.exec() == QDialog::Accepted)
+            canvas_->stepRepeatGrid(rows->value(), cols->value(), gx->value(), gy->value()); });
     add(ic::Icon::ContactSheet, QStringLiteral("联系表 Contact Sheet…"), false, [this] {
         auto* w = new ContactSheetDialog(nullptr);
         w->setAttribute(Qt::WA_DeleteOnClose);
