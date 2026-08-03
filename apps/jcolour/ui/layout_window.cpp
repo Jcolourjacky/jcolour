@@ -15,6 +15,7 @@
 #include <QFormLayout>
 #include <QDialogButtonBox>
 #include <QActionGroup>
+#include <QTimer>
 
 #include <QApplication>
 #include <QMenuBar>
@@ -1540,8 +1541,22 @@ QWidget* LayoutWindow::buildToolbox() {
         v->addWidget(b);
         return b;
     };
-    // 点选工具 → 状态栏立即显示工具名（InDesign 观感）
-    const auto announce = [this](const QString& name, const QString& hint) {
+    // 点选工具 → 紧挨工具条弹出工具名小标签（1.5s 自动隐藏），状态栏同步用法提示
+    auto* toolHud = new QLabel(canvas_);
+    toolHud->setStyleSheet(
+        "QLabel{background:rgba(35,38,43,235);color:#fff;border-radius:6px;"
+        "padding:5px 12px;font-size:12px;font-weight:600;}");
+    toolHud->hide();
+    auto* hudTimer = new QTimer(this);
+    hudTimer->setSingleShot(true);
+    connect(hudTimer, &QTimer::timeout, toolHud, &QLabel::hide);
+    const auto announce = [this, toolHud, hudTimer](const QString& name, const QString& hint) {
+        toolHud->setText(name);
+        toolHud->adjustSize();
+        toolHud->move(26, 26);            // 画布左上角，紧挨工具条
+        toolHud->show();
+        toolHud->raise();
+        hudTimer->start(1500);
         statusBar()->showMessage(hint.isEmpty() ? name : name + QStringLiteral("　—　") + hint, 5000);
     };
 
