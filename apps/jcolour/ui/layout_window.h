@@ -43,7 +43,7 @@ struct CanvasBlock {
     QString qrData;                        // QR blocks only
 };
 
-enum class CanvasTool { Select, Text, Qr };
+enum class CanvasTool { Select, Text, Qr, Hand, Measure };
 
 class LayoutCanvas : public QWidget {
     Q_OBJECT
@@ -65,12 +65,20 @@ public:
     void toggleGrid()      { showGrid_ = !showGrid_; update(); }
     void toggleCropMarks() { showCropMarks_ = !showCropMarks_; update(); }
 
-    // 选中块操作（拼版编辑器标配：复制 / 旋转 / 删除 / 对齐）
+    // 选中块操作（拼版编辑器标配：复制 / 份数 / 旋转 / 删除 / 对齐）
     void duplicateSelected();
+    void duplicateSelectedN(int copies);   // ×N 份（阶梯错位，配合自动拼版）
     void rotateSelected90();
     void deleteSelected();
     enum class Align { Left, HCenter, Right, Top, VCenter, Bottom };
     void alignSelected(Align a);   // 相对纸张对齐
+
+    // InDesign 式标尺：单位 / 参考线
+    enum class Unit { MM, CM, Inch };
+    void setUnit(Unit u) { unit_ = u; update(); }
+    void clearGuides()   { guidesV_.clear(); guidesH_.clear(); update(); }
+    void addGuideV(double mm) { guidesV_.push_back(mm); update(); }
+    void addGuideH(double mm) { guidesH_.push_back(mm); update(); }
 
 signals:
     void selectionChanged(int idx);  // -1 = none
@@ -87,6 +95,8 @@ protected:
     void wheelEvent(QWheelEvent*) override;
     bool event(QEvent*) override;    // 触控板捏合缩放 (ZoomNativeGesture)
     void resizeEvent(QResizeEvent*) override;
+    void contextMenuEvent(QContextMenuEvent*) override;   // 标尺右键：单位/清参考线
+    void keyPressEvent(QKeyEvent*) override;              // Delete 删除 · Cmd+D 复制
 
 private:
     QRectF  paperRectPx() const;
@@ -102,6 +112,20 @@ private:
     bool   showRulers_ = true;
     bool   showGrid_ = false;
     bool   showCropMarks_ = false;
+    double scrollX_ = 0.0;           // 缩放超视口后的横向平移（抓手/滚轮）
+
+    // InDesign 式标尺
+    Unit   unit_ = Unit::MM;
+    QVector<double> guidesV_, guidesH_;   // 参考线（纸面 mm）
+    int    dragGuideKind_ = 0;            // 0 无 · 1 竖(V) · 2 横(H)
+    int    dragGuideIdx_  = -1;           // -1 = 正在从标尺拖出新线
+    QPointF cursorPx_{-1, -1};            // 标尺光标位置指示
+
+    // 测量工具
+    bool    measuring_ = false, hasMeasure_ = false;
+    QPointF measA_, measB_;               // mm
+    QPointF panLast_;                     // 抓手拖动
+    bool    panning_ = false;
     double scroll_ = 0.0;    // px
     bool   dragging_ = false;
     int    resizing_ = -1;   // active handle index, -1 = not resizing

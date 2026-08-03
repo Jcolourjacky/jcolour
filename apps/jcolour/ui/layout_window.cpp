@@ -145,7 +145,7 @@ QRectF LayoutCanvas::paperRectPx() const {
     const double vw = width() - kRuler, vh = height() - kRuler;
     const double z  = zoom_ > 0 ? zoom_ : 0.8;
     const double pw = vw * z, ph = pw * kPaperH / kPaperW;
-    const double x  = kRuler + (vw - pw) / 2.0;
+    const double x  = kRuler + (vw - pw) / 2.0 + scrollX_;
     double y = kRuler + 16 - scroll_;
     if (ph + 32 <= vh) y = kRuler + (vh - ph) / 2.0;   // fits → centre
     return {x, y, pw, ph};
@@ -180,6 +180,11 @@ void LayoutCanvas::clampScroll() {
     const double ph = paperRectPx().height();
     const double maxS = qMax(0.0, ph + 32 - vh);
     scroll_ = qBound(0.0, scroll_, maxS);
+    // 横向：纸张比视口宽时允许平移，最多露出纸缘 40px
+    const double vw = width() - kRuler;
+    const double pw = vw * (zoom_ > 0 ? zoom_ : 0.8);
+    const double maxX = qMax(0.0, (pw - vw) / 2.0 + 40);
+    scrollX_ = qBound(-maxX, scrollX_, maxX);
 }
 
 void LayoutCanvas::select(int idx) {
@@ -358,7 +363,55 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
         }
     }
 
-    // rulers (mm ticks aligned to the paper origin, follow zoom/scroll)
+    // 参考线（InDesign 青色，横竖贯穿画布内容区）
+    if (!guidesV_.isEmpty() || !guidesH_.isEmpty()) {
+        g.setPen(QPen(QColor("#37b6f0"), 1));
+        for (double gm : guidesV_) {
+            const double x = p.x() + gm * s;
+            g.drawLine(QPointF(x, kRuler), QPointF(x, height()));
+        }
+        for (double gm : guidesH_) {
+            const double y = p.y() + gm * s;
+            g.drawLine(QPointF(kRuler, y), QPointF(width(), y));
+        }
+        // 拖动中的参考线显示位置读数
+        if (dragGuideKind_ != 0) {
+            const auto& list = (dragGuideKind_ == 1) ? guidesV_ : guidesH_;
+            const int idx = dragGuideIdx_ >= 0 ? dragGuideIdx_ : list.size() - 1;
+            const double v = list[idx];
+            g.setPen(Qt::white);
+            const QString txt = QStringLiteral("%1 mm").arg(v, 0, 'f', 1);
+            const QRectF tr(cursorPx_.x() + 10, cursorPx_.y() - 22, 74, 17);
+            g.setBrush(QColor("#37b6f0"));
+            g.setPen(Qt::NoPen);
+            g.drawRoundedRect(tr, 3, 3);
+            g.setPen(Qt::white);
+            g.drawText(tr, Qt::AlignCenter, txt);
+        }
+    }
+
+    // 测量工具读数（距离 + Δx/Δy）
+    if (hasMeasure_) {
+        const QPointF a(p.x() + measA_.x() * s, p.y() + measA_.y() * s);
+        const QPointF b(p.x() + measB_.x() * s, p.y() + measB_.y() * s);
+        g.setPen(QPen(QColor("#e05515"), 1.4));
+        g.drawLine(a, b);
+        g.setBrush(QColor("#e05515"));
+        g.setPen(Qt::NoPen);
+        g.drawEllipse(a, 2.5, 2.5);
+        g.drawEllipse(b, 2.5, 2.5);
+        const double dx = measB_.x() - measA_.x(), dy = measB_.y() - measA_.y();
+        const QString txt = QStringLiteral("%1 mm  (Δx %2 · Δy %3)")
+            .arg(std::hypot(dx, dy), 0, 'f', 1).arg(dx, 0, 'f', 1).arg(dy, 0, 'f', 1);
+        const QRectF tr((a.x() + b.x()) / 2 + 8, (a.y() + b.y()) / 2 - 24, 172, 17);
+        g.setBrush(QColor(35, 38, 43, 230));
+        g.drawRoundedRect(tr, 3, 3);
+        g.setPen(Qt::white);
+        QFont mf = g.font(); mf.setPointSizeF(8); g.setFont(mf);
+        g.drawText(tr, Qt::AlignCenter, txt);
+    }
+
+    // ── InDesign 式标尺：自适应刻度 · 单位切换 · 光标位置指示 ──
     if (!showRulers_) return;
     g.setPen(Qt::NoPen);
     g.setBrush(QColor("#eef0f2"));
@@ -368,30 +421,106 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
     g.setPen(QColor("#d2d5d9"));
     g.drawLine(0, kRuler, width(), kRuler);
     g.drawLine(kRuler, 0, kRuler, height());
-    g.setPen(QColor("#7c828a"));
+
+    // 单位与刻度：小刻度 ≥6px、标签刻度 ≥46px，随缩放加密/抽稀
+    const double unitMm = (unit_ == Unit::MM) ? 1.0 : (unit_ == Unit::CM) ? 10.0 : 25.4;
+    static const double kSteps[] = {0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 200};
+    double minorU = 200;
+    for (double st : kSteps) if (st * unitMm * s >= 6) { minorU = st; break; }
+    int labelEvery = 1;                            // 标签 = minor 的整数倍
+    for (int r : {1, 2, 4, 5, 10, 20, 50})
+        if (minorU * r * unitMm * s >= 46) { labelEvery = r; break; }
+    const auto fmt = [this](double u) {
+        return (unit_ == Unit::MM) ? QString::number(qRound(u)) : QStringLiteral("%1").arg(u, 0, 'g', 4);
+    };
+
     QFont rf = g.font(); rf.setPointSizeF(6.5); g.setFont(rf);
-    const int step = (s * 100 < 26) ? 200 : 100;
-    for (int mm = 0; mm <= int(kPaperW); mm += step) {
-        const double x = p.x() + mm * s;
-        if (x < kRuler - 4 || x > width()) continue;
-        g.drawLine(QPointF(x, kRuler - 5), QPointF(x, kRuler));
-        g.drawText(QRectF(x + 2, 1, 40, kRuler - 4), Qt::AlignLeft | Qt::AlignBottom,
-                   QString::number(mm));
+    const int nX = int(kPaperW / unitMm / minorU) + 1;
+    const int nY = int(kPaperH / unitMm / minorU) + 1;
+    for (int i = 0; i <= nX; ++i) {
+        const double u = i * minorU;
+        const double x = p.x() + u * unitMm * s;
+        if (x < kRuler || x > width()) continue;
+        const bool isLabel = (i % labelEvery == 0);
+        g.setPen(isLabel ? QColor("#7c828a") : QColor("#b4bac2"));
+        g.drawLine(QPointF(x, kRuler - (isLabel ? 6 : 3)), QPointF(x, kRuler));
+        if (isLabel)
+            g.drawText(QRectF(x + 2, 1, 46, kRuler - 5), Qt::AlignLeft | Qt::AlignBottom, fmt(u));
     }
-    for (int mm = 0; mm <= int(kPaperH); mm += step) {
-        const double y = p.y() + mm * s;
-        if (y < kRuler - 4 || y > height()) continue;
-        g.drawLine(QPointF(kRuler - 5, y), QPointF(kRuler, y));
-        g.save();
-        g.translate(2, y + 2);
-        g.rotate(90);
-        g.drawText(0, 0, QString::number(mm));
-        g.restore();
+    for (int i = 0; i <= nY; ++i) {
+        const double u = i * minorU;
+        const double y = p.y() + u * unitMm * s;
+        if (y < kRuler || y > height()) continue;
+        const bool isLabel = (i % labelEvery == 0);
+        g.setPen(isLabel ? QColor("#7c828a") : QColor("#b4bac2"));
+        g.drawLine(QPointF(kRuler - (isLabel ? 6 : 3), y), QPointF(kRuler, y));
+        if (isLabel) {
+            g.save();
+            g.translate(2, y + 2);
+            g.rotate(90);
+            g.drawText(0, 0, fmt(u));
+            g.restore();
+        }
     }
+
+    // 光标位置指示（InDesign 的标尺细线）
+    if (cursorPx_.x() > kRuler && cursorPx_.y() > kRuler) {
+        g.setPen(QColor("#e05515"));
+        g.drawLine(QPointF(cursorPx_.x(), 0), QPointF(cursorPx_.x(), kRuler));
+        g.drawLine(QPointF(0, cursorPx_.y()), QPointF(kRuler, cursorPx_.y()));
+    }
+
+    // 左上角单位标（点击右键换单位）
+    g.setPen(QColor("#7c828a"));
+    g.drawText(QRectF(0, 0, kRuler, kRuler), Qt::AlignCenter,
+               unit_ == Unit::MM ? "mm" : unit_ == Unit::CM ? "cm" : "in");
 }
 
 void LayoutCanvas::mousePressEvent(QMouseEvent* e) {
     const QPointF pos = e->position();
+    setFocus();
+
+    // ---- InDesign 式：从标尺拖出参考线（任意工具下都可用）----
+    if (showRulers_ && e->button() == Qt::LeftButton) {
+        if (pos.y() < kRuler && pos.x() >= kRuler) {          // 顶标尺 → 横参考线
+            dragGuideKind_ = 2; dragGuideIdx_ = -1;
+            guidesH_.push_back(pxToMm(pos).y());
+            update(); return;
+        }
+        if (pos.x() < kRuler && pos.y() >= kRuler) {          // 左标尺 → 竖参考线
+            dragGuideKind_ = 1; dragGuideIdx_ = -1;
+            guidesV_.push_back(pxToMm(pos).x());
+            update(); return;
+        }
+    }
+
+    // ---- 抓手平移 ----
+    if (tool_ == CanvasTool::Hand) {
+        panning_ = true; panLast_ = pos;
+        setCursor(Qt::ClosedHandCursor);
+        return;
+    }
+
+    // ---- 测量 ----
+    if (tool_ == CanvasTool::Measure) {
+        measuring_ = true; hasMeasure_ = true;
+        measA_ = measB_ = pxToMm(pos);
+        update(); return;
+    }
+
+    // ---- 拖动已有参考线（选择工具下，4px 命中）----
+    if (tool_ == CanvasTool::Select) {
+        const QRectF p = paperRectPx();
+        const double s = p.width() / kPaperW;
+        for (int i = 0; i < guidesV_.size(); ++i)
+            if (qAbs(p.x() + guidesV_[i] * s - pos.x()) < 4) {
+                dragGuideKind_ = 1; dragGuideIdx_ = i; return;
+            }
+        for (int i = 0; i < guidesH_.size(); ++i)
+            if (qAbs(p.y() + guidesH_[i] * s - pos.y()) < 4) {
+                dragGuideKind_ = 2; dragGuideIdx_ = i; return;
+            }
+    }
 
     // ---- insert tools: 文字 / 二维码 click-to-place ----
     if (tool_ == CanvasTool::Text || tool_ == CanvasTool::Qr) {
@@ -457,6 +586,31 @@ void LayoutCanvas::mousePressEvent(QMouseEvent* e) {
 
 void LayoutCanvas::mouseMoveEvent(QMouseEvent* e) {
     const QPointF pos = e->position();
+    cursorPx_ = pos;                       // 标尺光标位置指示
+    if (showRulers_) update();
+
+    // ---- 参考线拖动中 ----
+    if (dragGuideKind_ != 0) {
+        const QPointF mm = pxToMm(pos);
+        auto& list = (dragGuideKind_ == 1) ? guidesV_ : guidesH_;
+        const int idx = dragGuideIdx_ >= 0 ? dragGuideIdx_ : list.size() - 1;
+        list[idx] = (dragGuideKind_ == 1) ? mm.x() : mm.y();
+        update(); return;
+    }
+
+    // ---- 抓手平移中 ----
+    if (panning_) {
+        scrollX_ += pos.x() - panLast_.x();
+        scroll_  -= pos.y() - panLast_.y();
+        panLast_ = pos;
+        clampScroll(); update(); return;
+    }
+
+    // ---- 测量中 ----
+    if (measuring_) {
+        measB_ = pxToMm(pos);
+        update(); return;
+    }
 
     // ---- handle-resize in progress ----
     if (resizing_ >= 0 && sel_ >= 0) {
@@ -487,12 +641,23 @@ void LayoutCanvas::mouseMoveEvent(QMouseEvent* e) {
         CanvasBlock& b = blocks_[sel_];
         b.x = qBound(0.0, (pos.x() - p.x()) / s - dragOffsetMm_.x(), kPaperW - b.w);
         b.y = qBound(0.0, (pos.y() - p.y()) / s - dragOffsetMm_.y(), kPaperH - b.h);
+        // 参考线吸附（1.5mm，左右缘 / 上下缘）
+        for (double g : guidesV_) {
+            if (qAbs(b.x - g) < 1.5)             b.x = qBound(0.0, g, kPaperW - b.w);
+            else if (qAbs(b.x + b.w - g) < 1.5)  b.x = qBound(0.0, g - b.w, kPaperW - b.w);
+        }
+        for (double g : guidesH_) {
+            if (qAbs(b.y - g) < 1.5)             b.y = qBound(0.0, g, kPaperH - b.h);
+            else if (qAbs(b.y + b.h - g) < 1.5)  b.y = qBound(0.0, g - b.h, kPaperH - b.h);
+        }
         update();
         emit blockMoved(sel_);
         return;
     }
 
     // ---- hover cursor feedback ----
+    if (tool_ == CanvasTool::Hand)    { setCursor(Qt::OpenHandCursor); return; }
+    if (tool_ == CanvasTool::Measure) { setCursor(Qt::CrossCursor); return; }
     if (tool_ != CanvasTool::Select) { setCursor(Qt::CrossCursor); return; }
     const int h = handleAt(pos);
     if (h == 0 || h == 7)      setCursor(Qt::SizeFDiagCursor);
@@ -507,13 +672,57 @@ void LayoutCanvas::mouseMoveEvent(QMouseEvent* e) {
     }
 }
 
-void LayoutCanvas::mouseReleaseEvent(QMouseEvent*) { dragging_ = false; resizing_ = -1; }
+void LayoutCanvas::mouseReleaseEvent(QMouseEvent* e) {
+    // 参考线：拖回标尺 = 删除（InDesign 行为）
+    if (dragGuideKind_ != 0) {
+        const QPointF pos = e->position();
+        auto& list = (dragGuideKind_ == 1) ? guidesV_ : guidesH_;
+        const int idx = dragGuideIdx_ >= 0 ? dragGuideIdx_ : list.size() - 1;
+        const bool overRuler = (dragGuideKind_ == 1) ? pos.x() < kRuler : pos.y() < kRuler;
+        const double v = list[idx];
+        const bool offPaper = (dragGuideKind_ == 1) ? (v < 0 || v > kPaperW)
+                                                    : (v < 0 || v > kPaperH);
+        if (overRuler || offPaper) list.remove(idx);
+        dragGuideKind_ = 0; dragGuideIdx_ = -1;
+        update();
+    }
+    if (panning_) { panning_ = false; setCursor(Qt::OpenHandCursor); }
+    measuring_ = false;
+    dragging_ = false; resizing_ = -1;
+}
+
+void LayoutCanvas::keyPressEvent(QKeyEvent* e) {
+    if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) { deleteSelected(); return; }
+    if (e->matches(QKeySequence::StandardKey(QKeySequence::SelectAll))) { /* 保留 */ }
+    if ((e->modifiers() & Qt::ControlModifier) && e->key() == Qt::Key_D) { duplicateSelected(); return; }
+    if (e->key() == Qt::Key_Escape && hasMeasure_) { hasMeasure_ = false; update(); return; }
+    QWidget::keyPressEvent(e);
+}
+
+void LayoutCanvas::contextMenuEvent(QContextMenuEvent* e) {
+    // 标尺区右键：单位切换 + 清除参考线（InDesign 行为）
+    if (!(e->pos().x() < kRuler || e->pos().y() < kRuler)) { QWidget::contextMenuEvent(e); return; }
+    QMenu menu(this);
+    const struct { const char* label; Unit u; } units[] = {
+        {"毫米 (mm)", Unit::MM}, {"厘米 (cm)", Unit::CM}, {"英寸 (inch)", Unit::Inch},
+    };
+    for (const auto& it : units) {
+        auto* a = menu.addAction(QString::fromUtf8(it.label), this,
+                                 [this, u = it.u] { setUnit(u); });
+        a->setCheckable(true);
+        a->setChecked(unit_ == it.u);
+    }
+    menu.addSeparator();
+    menu.addAction(QStringLiteral("清除所有参考线"), this, [this] { clearGuides(); });
+    menu.exec(e->globalPos());
+}
 
 void LayoutCanvas::wheelEvent(QWheelEvent* e) {
     if (e->modifiers() & Qt::ControlModifier) {
         zoomBy(e->angleDelta().y() > 0 ? 10 : -10);
     } else {
-        scroll_ -= e->angleDelta().y() * 0.6;
+        scroll_  -= e->angleDelta().y() * 0.6;
+        scrollX_ += e->angleDelta().x() * 0.6;   // 触控板横向双指
         clampScroll();
         update();
     }
@@ -527,6 +736,22 @@ void LayoutCanvas::duplicateSelected() {
     b.x = qMin(b.x + 12.0, kPaperW - b.w);   // 错位 12mm，不越纸
     b.y = qMin(b.y + 12.0, kPaperH - b.h);
     blocks_.push_back(b);
+    sel_ = blocks_.size() - 1;
+    update();
+    emit blockAdded(sel_);
+    emit selectionChanged(sel_);
+}
+
+void LayoutCanvas::duplicateSelectedN(int copies) {
+    if (sel_ < 0 || sel_ >= blocks_.size() || copies < 1) return;
+    const CanvasBlock src = blocks_[sel_];
+    for (int i = 0; i < copies; ++i) {
+        CanvasBlock b = src;
+        const double d = 12.0 * (i + 1);
+        b.x = qMin(src.x + d, kPaperW - b.w);   // 阶梯错位，之后一键自动拼版归位
+        b.y = qMin(src.y + d, kPaperH - b.h);
+        blocks_.push_back(b);
+    }
     sel_ = blocks_.size() - 1;
     update();
     emit blockAdded(sel_);
@@ -955,10 +1180,20 @@ QWidget* LayoutWindow::buildToolbox() {
     add("▦", QStringLiteral("二维码 / 条码"), true, [this] {
         canvas_->setTool(CanvasTool::Qr);
         statusBar()->showMessage(QStringLiteral("二维码工具：在纸张上点击放置二维码"), 4000); });
+    add("✥", QStringLiteral("抓手平移（缩放后拖动画布）"), true, [this] {
+        canvas_->setTool(CanvasTool::Hand); });
+    add("⊿", QStringLiteral("测量（拖一条线读距离，Esc 清除）"), true, [this] {
+        canvas_->setTool(CanvasTool::Measure);
+        statusBar()->showMessage(QStringLiteral("测量工具：在纸上拖动读取 mm 距离与 Δx/Δy"), 4000); });
 
     // ── 块操作 ──
     sep();
-    add("⧉", QStringLiteral("复制选中块 (+12mm 错位)"), false, [this] { canvas_->duplicateSelected(); });
+    add("⧉", QStringLiteral("复制选中块 (Cmd+D)"), false, [this] { canvas_->duplicateSelected(); });
+    add("份", QStringLiteral("份数… 同图打 N 份（配合自动拼版）"), false, [this] {
+        bool ok = false;
+        const int n = QInputDialog::getInt(this, QStringLiteral("份数"),
+            QStringLiteral("再复制多少份？（之后可点「自动拼版」归位）"), 3, 1, 99, 1, &ok);
+        if (ok) canvas_->duplicateSelectedN(n); });
     add("⟳", QStringLiteral("旋转 90°（省纸拼版常用）"), false, [this] { canvas_->rotateSelected90(); });
     add("⌫", QStringLiteral("删除选中块"), false, [this] { canvas_->deleteSelected(); });
     {
@@ -1572,6 +1807,10 @@ void LayoutWindow::runActionForShot(const QString& action) {
         canvas_->zoomBy(action.mid(5).toInt());
     else if (action == QLatin1String("marks")) canvas_->toggleCropMarks();
     else if (action == QLatin1String("grid"))  canvas_->toggleGrid();
+    else if (action == QLatin1String("guides")) {   // 演示参考线（截图验证）
+        canvas_->addGuideV(150); canvas_->addGuideV(305);
+        canvas_->addGuideH(400);
+    }
     else if (action == QLatin1String("submit")) submitLayoutToQueue();
     else if (action == QLatin1String("nest")) runAutoNest();
     else if (action == QLatin1String("settings")) {
