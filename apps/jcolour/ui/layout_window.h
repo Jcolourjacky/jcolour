@@ -56,6 +56,7 @@ public:
 
     int  selected() const { return sel_; }
     void select(int idx);
+    const QVector<int>& selectionList() const { return multiSel_; }   // 含主选中
 
     void setTool(CanvasTool t);          // 切工具（提交进行中的文字编辑并发 toolChanged）
     CanvasTool tool() const { return tool_; }
@@ -72,8 +73,13 @@ public:
     void duplicateSelectedN(int copies);   // ×N 份（阶梯错位，配合自动拼版）
     void rotateSelected90();
     void deleteSelected();
+    // InDesign 对齐面板：对齐到 选区/页面 · 六向对齐 · 分布对象 · 分布间距
     enum class Align { Left, HCenter, Right, Top, VCenter, Bottom };
-    void alignSelected(Align a);   // 相对纸张对齐
+    enum class AlignTo { Selection, Page };
+    void setAlignTo(AlignTo t) { alignTo_ = t; }
+    AlignTo alignTo() const { return alignTo_; }
+    void alignSelected(Align a);
+    void distributeSelected(bool horizontal, bool centers);  // centers=居中分布 / 否则等间距
 
     // InDesign 式标尺：单位 / 参考线
     enum class Unit { MM, CM, Inch };
@@ -146,6 +152,13 @@ private:
     // 空格临时抓手（InDesign/Photoshop 通用手势）
     bool       spacePan_ = false;
     CanvasTool prevTool_ = CanvasTool::Select;
+
+    // 多选（InDesign 选择模型：Shift 加选 · 空白处框选 · 群体拖动）
+    QVector<int>     multiSel_;      // 含 sel_；单选时 size==1
+    QVector<QPointF> dragStart_;     // 群移起始位置 (mm)，与 multiSel_ 对应
+    bool    marquee_ = false;
+    QPointF marqueeA_, marqueeB_;    // px
+    AlignTo alignTo_ = AlignTo::Selection;
 
     // InDesign 式文字框
     bool    creatingText_ = false;

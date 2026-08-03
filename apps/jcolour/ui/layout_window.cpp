@@ -14,6 +14,7 @@
 #include <QTextEdit>
 #include <QFormLayout>
 #include <QDialogButtonBox>
+#include <QActionGroup>
 
 #include <QApplication>
 #include <QMenuBar>
@@ -167,7 +168,7 @@ QPointF LayoutCanvas::pxToMm(const QPointF& px) const {
 }
 
 int LayoutCanvas::handleAt(const QPointF& px) const {
-    if (sel_ < 0 || sel_ >= blocks_.size()) return -1;
+    if (sel_ < 0 || sel_ >= blocks_.size() || multiSel_.size() > 1) return -1;
     const QRectF r = blockRectPx(blocks_[sel_]);
     const QPointF c[8] = {
         r.topLeft(), {r.center().x(), r.top()}, r.topRight(),
@@ -191,8 +192,10 @@ void LayoutCanvas::clampScroll() {
 }
 
 void LayoutCanvas::select(int idx) {
-    if (idx == sel_) return;
+    if (idx == sel_ && multiSel_.size() <= 1) return;
     sel_ = idx;
+    multiSel_.clear();
+    if (idx >= 0) multiSel_.push_back(idx);
     update();
     emit selectionChanged(sel_);
 }
@@ -312,6 +315,11 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
             : b.name;
         g.drawText(QRectF(r.x(), r.bottom() + 1, r.width(), 12), Qt::AlignHCenter, lbl);
 
+        if (i != sel_ && multiSel_.contains(i)) {   // 多选中的次级块：细蓝框
+            g.setPen(QPen(QColor("#2e7dd7"), 1.1));
+            g.setBrush(Qt::NoBrush);
+            g.drawRect(r);
+        }
         if (i == sel_) {
             g.setPen(QPen(QColor("#2e7dd7"), 1.6));
             g.setBrush(Qt::NoBrush);
@@ -319,6 +327,8 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
             QPen dash(QColor(46, 125, 215, 115), 1, Qt::DashLine);
             g.setPen(dash);
             g.drawRect(r.adjusted(-5, -5, 5, 5));
+            if (multiSel_.size() > 1) { /* 群选时不画缩放手柄（InDesign 语义） */ }
+            else {
             g.setPen(QPen(Qt::white, 1));
             g.setBrush(QColor("#2e7dd7"));
             const QPointF c[8] = {
@@ -326,6 +336,7 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
                 {r.left(), r.center().y()}, {r.right(), r.center().y()},
                 r.bottomLeft(), {r.center().x(), r.bottom()}, r.bottomRight()};
             for (const auto& pt : c) g.drawEllipse(pt, 3.4, 3.4);
+            }
         }
     }
 
@@ -365,6 +376,14 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
             mark(r.bottomLeft(), -1, +1);
             mark(r.bottomRight(), +1, +1);
         }
+    }
+
+    // 框选橡皮筋
+    if (marquee_) {
+        const QRectF mr = QRectF(marqueeA_, marqueeB_).normalized();
+        g.setPen(QPen(QColor(46, 125, 215, 160), 1, Qt::DashLine));
+        g.setBrush(QColor(46, 125, 215, 24));
+        g.drawRect(mr);
     }
 
     // 文字框拖拽预览（虚线框）
@@ -585,17 +604,35 @@ void LayoutCanvas::mousePressEvent(QMouseEvent* e) {
         return;
     }
 
-    // ---- select / drag ----
+    // ---- select / drag（InDesign 选择模型）----
     for (int i = blocks_.size() - 1; i >= 0; --i) {
         const QRectF r = blockRectPx(blocks_[i]);
-        if (r.contains(pos)) {
-            select(i);
-            dragging_ = true;
-            const QRectF p = paperRectPx();
-            const double s = p.width() / kPaperW;
-            dragOffsetMm_ = QPointF((pos.x() - r.x()) / s, (pos.y() - r.y()) / s);
+        if (!r.contains(pos)) continue;
+        if (e->modifiers() & Qt::ShiftModifier) {          // Shift 加选/减选
+            const int at = multiSel_.indexOf(i);
+            if (at >= 0) { if (multiSel_.size() > 1) multiSel_.remove(at); }
+            else multiSel_.push_back(i);
+            sel_ = multiSel_.isEmpty() ? -1 : multiSel_.last();
+            update();
+            emit selectionChanged(sel_);
             return;
         }
+        if (!multiSel_.contains(i)) select(i);             // 点中未选块 → 单选
+        else { sel_ = i; emit selectionChanged(sel_); }    // 点中已选块 → 保留群选拖动
+        dragging_ = true;
+        const QRectF p = paperRectPx();
+        const double s = p.width() / kPaperW;
+        dragOffsetMm_ = QPointF((pos.x() - r.x()) / s, (pos.y() - r.y()) / s);
+        dragStart_.clear();
+        for (int k : multiSel_) dragStart_.push_back({blocks_[k].x, blocks_[k].y});
+        return;
+    }
+
+    // ---- 空白处：清选择 + 框选（InDesign 橡皮筋）----
+    if (tool_ == CanvasTool::Select) {
+        select(-1);
+        marquee_ = true;
+        marqueeA_ = marqueeB_ = pos;
     }
 }
 
@@ -664,21 +701,36 @@ void LayoutCanvas::mouseMoveEvent(QMouseEvent* e) {
         return;
     }
 
-    // ---- drag-move in progress ----
+    // ---- marquee 框选中 ----
+    if (marquee_) {
+        marqueeB_ = pos;
+        update(); return;
+    }
+
+    // ---- drag-move in progress（群体移动，主块吸附参考线）----
     if (dragging_ && sel_ >= 0) {
         const QRectF p = paperRectPx();
         const double s = p.width() / kPaperW;
+        const int primaryAt = multiSel_.indexOf(sel_);
         CanvasBlock& b = blocks_[sel_];
-        b.x = qBound(0.0, (pos.x() - p.x()) / s - dragOffsetMm_.x(), kPaperW - b.w);
-        b.y = qBound(0.0, (pos.y() - p.y()) / s - dragOffsetMm_.y(), kPaperH - b.h);
-        // 参考线吸附（1.5mm，左右缘 / 上下缘）
+        const QPointF want((pos.x() - p.x()) / s - dragOffsetMm_.x(),
+                           (pos.y() - p.y()) / s - dragOffsetMm_.y());
+        double nx = qBound(0.0, want.x(), kPaperW - b.w);
+        double ny = qBound(0.0, want.y(), kPaperH - b.h);
         for (double g : guidesV_) {
-            if (qAbs(b.x - g) < 1.5)             b.x = qBound(0.0, g, kPaperW - b.w);
-            else if (qAbs(b.x + b.w - g) < 1.5)  b.x = qBound(0.0, g - b.w, kPaperW - b.w);
+            if (qAbs(nx - g) < 1.5)             nx = qBound(0.0, g, kPaperW - b.w);
+            else if (qAbs(nx + b.w - g) < 1.5)  nx = qBound(0.0, g - b.w, kPaperW - b.w);
         }
         for (double g : guidesH_) {
-            if (qAbs(b.y - g) < 1.5)             b.y = qBound(0.0, g, kPaperH - b.h);
-            else if (qAbs(b.y + b.h - g) < 1.5)  b.y = qBound(0.0, g - b.h, kPaperH - b.h);
+            if (qAbs(ny - g) < 1.5)             ny = qBound(0.0, g, kPaperH - b.h);
+            else if (qAbs(ny + b.h - g) < 1.5)  ny = qBound(0.0, g - b.h, kPaperH - b.h);
+        }
+        // 群移：主块相对起始位移套用到所有选中块
+        const QPointF delta(nx - dragStart_[primaryAt].x(), ny - dragStart_[primaryAt].y());
+        for (int k = 0; k < multiSel_.size(); ++k) {
+            CanvasBlock& bb = blocks_[multiSel_[k]];
+            bb.x = qBound(0.0, dragStart_[k].x() + delta.x(), kPaperW - bb.w);
+            bb.y = qBound(0.0, dragStart_[k].y() + delta.y(), kPaperH - bb.h);
         }
         update();
         emit blockMoved(sel_);
@@ -738,6 +790,19 @@ void LayoutCanvas::mouseReleaseEvent(QMouseEvent* e) {
         update();
     }
     if (panning_) { panning_ = false; setCursor(Qt::OpenHandCursor); }
+    // 框选落定：选中与框相交的块（InDesign 橡皮筋语义）
+    if (marquee_) {
+        marquee_ = false;
+        const QRectF mr = QRectF(marqueeA_, marqueeB_).normalized();
+        if (mr.width() > 4 || mr.height() > 4) {
+            multiSel_.clear();
+            for (int i = 0; i < blocks_.size(); ++i)
+                if (blockRectPx(blocks_[i]).intersects(mr)) multiSel_.push_back(i);
+            sel_ = multiSel_.isEmpty() ? -1 : multiSel_.last();
+            emit selectionChanged(sel_);
+        }
+        update();
+    }
     measuring_ = false;
     dragging_ = false; resizing_ = -1;
 }
@@ -920,12 +985,17 @@ void LayoutCanvas::wheelEvent(QWheelEvent* e) {
 void LayoutCanvas::resizeEvent(QResizeEvent*) { clampScroll(); }
 
 void LayoutCanvas::duplicateSelected() {
-    if (sel_ < 0 || sel_ >= blocks_.size()) return;
-    CanvasBlock b = blocks_[sel_];
-    b.x = qMin(b.x + 12.0, kPaperW - b.w);   // 错位 12mm，不越纸
-    b.y = qMin(b.y + 12.0, kPaperH - b.h);
-    blocks_.push_back(b);
-    sel_ = blocks_.size() - 1;
+    if (multiSel_.isEmpty()) return;
+    QVector<int> clones;
+    for (int k : multiSel_) {                 // InDesign：整个选区一起复制
+        CanvasBlock b = blocks_[k];
+        b.x = qMin(b.x + 12.0, kPaperW - b.w);   // 错位 12mm，不越纸
+        b.y = qMin(b.y + 12.0, kPaperH - b.h);
+        blocks_.push_back(b);
+        clones.push_back(blocks_.size() - 1);
+    }
+    multiSel_ = clones;                       // 新副本成为当前选区
+    sel_ = clones.last();
     update();
     emit blockAdded(sel_);
     emit selectionChanged(sel_);
@@ -948,33 +1018,93 @@ void LayoutCanvas::duplicateSelectedN(int copies) {
 }
 
 void LayoutCanvas::rotateSelected90() {
-    if (sel_ < 0 || sel_ >= blocks_.size()) return;
-    auto& b = blocks_[sel_];
-    std::swap(b.w, b.h);
-    b.x = qBound(0.0, b.x, kPaperW - b.w);   // 旋转后拉回纸内
-    b.y = qBound(0.0, b.y, kPaperH - b.h);
+    if (multiSel_.isEmpty()) return;
+    for (int k : multiSel_) {
+        auto& b = blocks_[k];
+        std::swap(b.w, b.h);
+        b.x = qBound(0.0, b.x, kPaperW - b.w);   // 旋转后拉回纸内
+        b.y = qBound(0.0, b.y, kPaperH - b.h);
+    }
     update();
     emit blockMoved(sel_);
 }
 
 void LayoutCanvas::deleteSelected() {
-    if (sel_ < 0 || sel_ >= blocks_.size()) return;
-    blocks_.remove(sel_);
+    if (multiSel_.isEmpty()) return;
+    QVector<int> idx = multiSel_;
+    std::sort(idx.begin(), idx.end(), std::greater<int>());
+    for (int k : idx) blocks_.remove(k);
     sel_ = -1;
+    multiSel_.clear();
     update();
     emit selectionChanged(-1);
 }
 
 void LayoutCanvas::alignSelected(Align a) {
-    if (sel_ < 0 || sel_ >= blocks_.size()) return;
-    auto& b = blocks_[sel_];
-    switch (a) {
-        case Align::Left:    b.x = 0; break;
-        case Align::HCenter: b.x = (kPaperW - b.w) / 2; break;
-        case Align::Right:   b.x = kPaperW - b.w; break;
-        case Align::Top:     b.y = 0; break;
-        case Align::VCenter: b.y = (kPaperH - b.h) / 2; break;
-        case Align::Bottom:  b.y = kPaperH - b.h; break;
+    if (multiSel_.isEmpty()) return;
+    const bool toPage = alignTo_ == AlignTo::Page;
+    if (!toPage && multiSel_.size() < 2) return;   // InDesign：对齐到选区需 ≥2 个对象
+    // 参照边界：页面 或 选区包围盒
+    double L = 0, T = 0, R = kPaperW, B = kPaperH;
+    if (!toPage) {
+        L = 1e9; T = 1e9; R = -1e9; B = -1e9;
+        for (int k : multiSel_) {
+            const auto& b = blocks_[k];
+            L = qMin(L, b.x); T = qMin(T, b.y);
+            R = qMax(R, b.x + b.w); B = qMax(B, b.y + b.h);
+        }
+    }
+    for (int k : multiSel_) {
+        auto& b = blocks_[k];
+        switch (a) {
+            case Align::Left:    b.x = L; break;
+            case Align::HCenter: b.x = (L + R) / 2 - b.w / 2; break;
+            case Align::Right:   b.x = R - b.w; break;
+            case Align::Top:     b.y = T; break;
+            case Align::VCenter: b.y = (T + B) / 2 - b.h / 2; break;
+            case Align::Bottom:  b.y = B - b.h; break;
+        }
+        b.x = qBound(0.0, b.x, kPaperW - b.w);
+        b.y = qBound(0.0, b.y, kPaperH - b.h);
+    }
+    update();
+    emit blockMoved(sel_);
+}
+
+void LayoutCanvas::distributeSelected(bool horizontal, bool centers) {
+    if (multiSel_.size() < 3) return;              // InDesign：分布需 ≥3 个对象
+    QVector<int> idx = multiSel_;
+    std::sort(idx.begin(), idx.end(), [this, horizontal](int a, int b) {
+        return horizontal ? blocks_[a].x < blocks_[b].x : blocks_[a].y < blocks_[b].y;
+    });
+    const int n = idx.size();
+    if (centers) {
+        // 居中分布：首末中心不动，其余中心等距
+        auto center = [this, horizontal](int k) {
+            const auto& b = blocks_[k];
+            return horizontal ? b.x + b.w / 2 : b.y + b.h / 2;
+        };
+        const double c0 = center(idx.first()), c1 = center(idx.last());
+        for (int i = 1; i < n - 1; ++i) {
+            auto& b = blocks_[idx[i]];
+            const double c = c0 + (c1 - c0) * i / (n - 1);
+            if (horizontal) b.x = qBound(0.0, c - b.w / 2, kPaperW - b.w);
+            else            b.y = qBound(0.0, c - b.h / 2, kPaperH - b.h);
+        }
+    } else {
+        // 等间距：首末外缘不动，块间空隙相等
+        double span = 0, sum = 0;
+        const auto& f = blocks_[idx.first()];
+        const auto& l = blocks_[idx.last()];
+        span = horizontal ? (l.x + l.w - f.x) : (l.y + l.h - f.y);
+        for (int k : idx) sum += horizontal ? blocks_[k].w : blocks_[k].h;
+        const double gap = (span - sum) / (n - 1);
+        double cur = horizontal ? f.x : f.y;
+        for (int i = 0; i < n; ++i) {
+            auto& b = blocks_[idx[i]];
+            if (horizontal) { b.x = qBound(0.0, cur, kPaperW - b.w); cur = b.x + b.w + gap; }
+            else            { b.y = qBound(0.0, cur, kPaperH - b.h); cur = b.y + b.h + gap; }
+        }
     }
     update();
     emit blockMoved(sel_);
@@ -1423,10 +1553,25 @@ QWidget* LayoutWindow::buildToolbox() {
     add(ic::Icon::Trash, rich(QStringLiteral("删除"), QStringLiteral("Delete"),
         QStringLiteral("删除选中块")), false, [this] { canvas_->deleteSelected(); });
     {
-        auto* b = add(ic::Icon::AlignLeftIc, rich(QStringLiteral("对齐"), {},
-            QStringLiteral("选中块相对纸张 左/中/右/顶/底 对齐")), false, nullptr);
+        // InDesign 对齐面板：对齐到(选区/页面) · 对齐对象 · 分布对象 · 分布间距
+        auto* b = add(ic::Icon::AlignLeftIc, rich(QStringLiteral("对齐与分布"), {},
+            QStringLiteral("InDesign 对齐面板：对齐到选区/页面、分布对象、等间距")), false, nullptr);
         auto* menu = new QMenu(b);
         using A = LayoutCanvas::Align;
+
+        auto* secTo = menu->addSection(QStringLiteral("对齐到"));
+        Q_UNUSED(secTo);
+        auto* toGrp = new QActionGroup(menu);
+        auto* toSel = menu->addAction(QStringLiteral("选区（需选中 ≥2 个块）"));
+        auto* toPage = menu->addAction(QStringLiteral("页面"));
+        for (auto* a : {toSel, toPage}) { a->setCheckable(true); toGrp->addAction(a); }
+        toSel->setChecked(true);
+        connect(toSel, &QAction::triggered, this,
+                [this] { canvas_->setAlignTo(LayoutCanvas::AlignTo::Selection); });
+        connect(toPage, &QAction::triggered, this,
+                [this] { canvas_->setAlignTo(LayoutCanvas::AlignTo::Page); });
+
+        menu->addSection(QStringLiteral("对齐对象"));
         const std::pair<QString, A> items[] = {
             {QStringLiteral("左对齐"), A::Left},   {QStringLiteral("水平居中"), A::HCenter},
             {QStringLiteral("右对齐"), A::Right},  {QStringLiteral("顶对齐"), A::Top},
@@ -1434,6 +1579,18 @@ QWidget* LayoutWindow::buildToolbox() {
         };
         for (const auto& [txt, mode] : items)
             menu->addAction(txt, this, [this, mode] { canvas_->alignSelected(mode); });
+
+        menu->addSection(QStringLiteral("分布对象（需 ≥3 个块）"));
+        menu->addAction(QStringLiteral("水平居中分布"), this,
+                        [this] { canvas_->distributeSelected(true, true); });
+        menu->addAction(QStringLiteral("垂直居中分布"), this,
+                        [this] { canvas_->distributeSelected(false, true); });
+        menu->addSection(QStringLiteral("分布间距"));
+        menu->addAction(QStringLiteral("水平等间距"), this,
+                        [this] { canvas_->distributeSelected(true, false); });
+        menu->addAction(QStringLiteral("垂直等间距"), this,
+                        [this] { canvas_->distributeSelected(false, false); });
+
         b->setMenu(menu);
         b->setPopupMode(QToolButton::InstantPopup);
     }
