@@ -2,6 +2,8 @@
 
 #include "theme.h"
 #include "state_machine.h"  // engine: jcolour::calibration
+#include "calibration_stepper.h"
+#include "../paper_state.h"
 
 #include <QtWidgets>
 #include <QDateTime>
@@ -80,28 +82,17 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
 
     auto* newBtn = new QPushButton(QStringLiteral("＋ 新建 / 校准向导"));
     newBtn->setObjectName("primary");
+    connect(newBtn, &QPushButton::clicked, this, &PrintEnvironmentManager::startNewCalibration);
     ll->addWidget(newBtn);
 
-    struct EnvItem { QString name, sub, badge, colour; bool on; };
-    const EnvItem envs[] = {
-        {"P9500 · Photo Rag 308",     "总墨 260% · 4 模式 9 天 ✓", "RGB 需检查", "#c2861a", true},
-        {"P9500 · Canson Baryta 310", "总墨 280% · 全部模式",       "过期 18天",  "#c2861a", false},
-        {"P9500 · Legacy Fibre",      "墨批 #A6 旧批",              "墨批已变",   "#c0392b", false},
-    };
-    for (const auto& e : envs) {
-        auto* it = new QFrame;
-        it->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:6px;}")
-                              .arg(e.on ? "#eaf2fc" : "#ffffff", e.on ? "#bcd4f2" : "#e2e4e7"));
-        auto* il = new QVBoxLayout(it);
-        il->setContentsMargins(8, 6, 8, 6);
-        il->setSpacing(1);
-        il->addWidget(mk(e.name, "font-size:11px;font-weight:700;color:#23262b;border:none;background:transparent;"));
-        il->addWidget(mk(e.sub, "font-size:9px;color:#6b7079;border:none;background:transparent;"));
-        il->addWidget(mk(e.badge, QString("font-size:9px;font-weight:600;color:%1;border:none;background:transparent;").arg(e.colour)));
-        ll->addWidget(it);
-    }
+    // 环境列表 = 真实配置库（PaperState）；rebuildEnvList() 负责填充
+    listLayout_ = new QVBoxLayout;
+    listLayout_->setContentsMargins(0, 0, 0, 0);
+    listLayout_->setSpacing(6);
+    ll->addLayout(listLayout_);
     ll->addStretch(1);
     body->addWidget(left);
+    rebuildEnvList();
 
     // ---- right: detail (base calibration + 5-mode table) ----
     auto* right = new QWidget;
@@ -203,6 +194,64 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
     connect(ok, &QPushButton::clicked, this, &QDialog::accept);
     foot->addWidget(ok);
     rl->addLayout(foot);
+}
+
+void PrintEnvironmentManager::startNewCalibration() {
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("新建打印环境 · 校准向导"));
+    dlg.resize(920, 640);
+    auto* l = new QVBoxLayout(&dlg);
+    l->setContentsMargins(0, 0, 0, 0);
+    auto* stepper = new CalibrationStepper(&dlg);
+    stepper->resetForNew();
+    l->addWidget(stepper);
+    connect(stepper, &CalibrationStepper::finished,  &dlg, &QDialog::accept);
+    connect(stepper, &CalibrationStepper::cancelled, &dlg, &QDialog::reject);
+    dlg.exec();
+    rebuildEnvList();   // 存為標準後（PaperState 已落盘）刷新左列
+}
+
+void PrintEnvironmentManager::rebuildEnvList() {
+    while (auto* item = listLayout_->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    const auto configs = PaperState::instance().listConfigs();
+    if (configs.isEmpty()) {
+        listLayout_->addWidget(mk(QStringLiteral("尚无打印环境。\n点上方「新建 / 校准向导」建立第一个。"),
+            "font-size:10px;color:#868c95;border:none;background:transparent;padding:6px 2px;"));
+        return;
+    }
+    const cal::Timestamp now = QDateTime::currentSecsSinceEpoch();
+    bool first = true;
+    for (const auto& c : configs) {
+        // 徽章走真实引擎状态（按天龄 + 墨批变化判定）
+        cal::ParamSet ps;
+        ps.state         = cal::CalibState::FRESH;
+        ps.key           = {c.inkBatch.toStdString(), c.paperId.toStdString()};
+        ps.calibrated_at = c.lastCalibrated.isValid() ? c.lastCalibrated.toSecsSinceEpoch() : 0;
+        const int days = c.lastCalibrated.isValid()
+            ? int(c.lastCalibrated.daysTo(QDateTime::currentDateTime())) : 9999;
+        const cal::CalibState st = cal::compute_state(
+            ps, now, cal::InkBatch{c.inkBatch.toStdString()}, cal::Paper{c.paperId.toStdString()});
+        QString colour;
+        const QString badge = stateBadge(st, days, colour);
+
+        auto* it = new QFrame;
+        it->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:6px;}")
+                              .arg(first ? "#eaf2fc" : "#ffffff", first ? "#bcd4f2" : "#e2e4e7"));
+        auto* il = new QVBoxLayout(it);
+        il->setContentsMargins(8, 6, 8, 6);
+        il->setSpacing(1);
+        il->addWidget(mk(QStringLiteral("%1 · %2").arg(c.printer, c.paperName),
+            "font-size:11px;font-weight:700;color:#23262b;border:none;background:transparent;"));
+        il->addWidget(mk(QStringLiteral("%1 · 墨批 %2 · v%3").arg(c.paperMeta, c.inkBatch).arg(c.version),
+            "font-size:9px;color:#6b7079;border:none;background:transparent;"));
+        il->addWidget(mk(badge,
+            QString("font-size:9px;font-weight:600;color:%1;border:none;background:transparent;").arg(colour)));
+        listLayout_->addWidget(it);
+        first = false;
+    }
 }
 
 }  // namespace jcolour::ui
