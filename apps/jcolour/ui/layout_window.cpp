@@ -1053,7 +1053,7 @@ QWidget* LayoutWindow::buildPropBars() {
         h->addWidget(pw_ = mmSpin(286, kPaperW));
         h->addWidget(new QLabel(QStringLiteral("高:")));
         h->addWidget(ph_ = mmSpin(380, kPaperH));
-        auto* link = glyphBtn("🔗", QStringLiteral("等比锁定"));
+        auto* link = iconBtn(ic::Icon::LinkIc, QStringLiteral("等比锁定"));
         link->setCheckable(true); link->setChecked(true);
         h->addWidget(link);
         h->addWidget(vsep());
@@ -1061,7 +1061,7 @@ QWidget* LayoutWindow::buildPropBars() {
         rot->setRange(-360, 360); rot->setDecimals(0); rot->setSuffix("°");
         rot->setFixedWidth(56);
         h->addWidget(rot);
-        h->addWidget(glyphBtn("⟳", QStringLiteral("顺时针 90°")));
+        h->addWidget(iconBtn(ic::Icon::RotateCw, QStringLiteral("顺时针 90°")));
         h->addWidget(glyphBtn("⇋", QStringLiteral("水平镜像")));
         h->addWidget(glyphBtn("⇵", QStringLiteral("垂直镜像")));
         h->addWidget(vsep());
@@ -1160,10 +1160,11 @@ QWidget* LayoutWindow::buildToolbox() {
         v->addWidget(s, 0, Qt::AlignHCenter);
         v->addSpacing(3);
     };
-    const auto add = [&](const char* glyph, const QString& tip, bool exclusiveTool,
+    const auto add = [&](ic::Icon glyph, const QString& tip, bool exclusiveTool,
                          std::function<void()> fn) {
-        auto* b = glyphBtn(QString::fromUtf8(glyph), tip);
-        b->setFixedSize(26, 26);
+        auto* b = iconBtn(glyph, tip);
+        b->setFixedSize(30, 28);
+        b->setIconSize(QSize(20, 20));
         if (exclusiveTool) { b->setCheckable(true); b->setAutoExclusive(true); }
         if (fn) connect(b, &QToolButton::clicked, this, std::move(fn));
         v->addWidget(b);
@@ -1171,33 +1172,33 @@ QWidget* LayoutWindow::buildToolbox() {
     };
 
     // ── 工具（互斥选中）──
-    selectToolBtn_ = add("➤", QStringLiteral("选择 / 移动"), true,
+    selectToolBtn_ = add(ic::Icon::Cursor, QStringLiteral("选择 / 移动"), true,
         [this] { canvas_->setTool(CanvasTool::Select); });
     selectToolBtn_->setChecked(true);
-    add("A", QStringLiteral("文字"), true, [this] {
+    add(ic::Icon::Type, QStringLiteral("文字"), true, [this] {
         canvas_->setTool(CanvasTool::Text);
         statusBar()->showMessage(QStringLiteral("文字工具：在纸张上点击放置文字"), 4000); });
-    add("▦", QStringLiteral("二维码 / 条码"), true, [this] {
+    add(ic::Icon::QrCode, QStringLiteral("二维码 / 条码"), true, [this] {
         canvas_->setTool(CanvasTool::Qr);
         statusBar()->showMessage(QStringLiteral("二维码工具：在纸张上点击放置二维码"), 4000); });
-    add("✥", QStringLiteral("抓手平移（缩放后拖动画布）"), true, [this] {
+    add(ic::Icon::Hand, QStringLiteral("抓手平移（缩放后拖动画布）"), true, [this] {
         canvas_->setTool(CanvasTool::Hand); });
-    add("⊿", QStringLiteral("测量（拖一条线读距离，Esc 清除）"), true, [this] {
+    add(ic::Icon::Measure, QStringLiteral("测量（拖一条线读距离，Esc 清除）"), true, [this] {
         canvas_->setTool(CanvasTool::Measure);
         statusBar()->showMessage(QStringLiteral("测量工具：在纸上拖动读取 mm 距离与 Δx/Δy"), 4000); });
 
     // ── 块操作 ──
     sep();
-    add("⧉", QStringLiteral("复制选中块 (Cmd+D)"), false, [this] { canvas_->duplicateSelected(); });
-    add("份", QStringLiteral("份数… 同图打 N 份（配合自动拼版）"), false, [this] {
+    add(ic::Icon::Copy, QStringLiteral("复制选中块 (Cmd+D)"), false, [this] { canvas_->duplicateSelected(); });
+    add(ic::Icon::Copies, QStringLiteral("份数… 同图打 N 份（配合自动拼版）"), false, [this] {
         bool ok = false;
         const int n = QInputDialog::getInt(this, QStringLiteral("份数"),
             QStringLiteral("再复制多少份？（之后可点「自动拼版」归位）"), 3, 1, 99, 1, &ok);
         if (ok) canvas_->duplicateSelectedN(n); });
-    add("⟳", QStringLiteral("旋转 90°（省纸拼版常用）"), false, [this] { canvas_->rotateSelected90(); });
-    add("⌫", QStringLiteral("删除选中块"), false, [this] { canvas_->deleteSelected(); });
+    add(ic::Icon::RotateCw, QStringLiteral("旋转 90°（省纸拼版常用）"), false, [this] { canvas_->rotateSelected90(); });
+    add(ic::Icon::Trash, QStringLiteral("删除选中块"), false, [this] { canvas_->deleteSelected(); });
     {
-        auto* b = add("≡", QStringLiteral("对齐（相对纸张）"), false, nullptr);
+        auto* b = add(ic::Icon::AlignLeftIc, QStringLiteral("对齐（相对纸张）"), false, nullptr);
         auto* menu = new QMenu(b);
         using A = LayoutCanvas::Align;
         const std::pair<QString, A> items[] = {
@@ -1213,12 +1214,12 @@ QWidget* LayoutWindow::buildToolbox() {
 
     // ── 拼版 ──
     sep();
-    add("▥", QStringLiteral("自动拼版 / 嵌套"), false, [this] { runAutoNest(); });
-    add("⊞", QStringLiteral("步进重复 Step && Repeat…"), false, [this] {
+    add(ic::Icon::Grid, QStringLiteral("自动拼版 / 嵌套"), false, [this] { runAutoNest(); });
+    add(ic::Icon::StepRepeat, QStringLiteral("步进重复 Step && Repeat…"), false, [this] {
         auto* dlg = new StepRepeatDialog(this);
         dlg->setAttribute(Qt::WA_DeleteOnClose);
         dlg->show(); });
-    add("▤", QStringLiteral("联系表 Contact Sheet…"), false, [this] {
+    add(ic::Icon::ContactSheet, QStringLiteral("联系表 Contact Sheet…"), false, [this] {
         auto* w = new ContactSheetDialog(nullptr);
         w->setAttribute(Qt::WA_DeleteOnClose);
         w->setWindowTitle(QStringLiteral("联系表"));
@@ -1226,15 +1227,15 @@ QWidget* LayoutWindow::buildToolbox() {
 
     // ── 显示开关 ──
     sep();
-    add("✂", QStringLiteral("裁切角线 开/关（裁纸标记）"), false, [this] { canvas_->toggleCropMarks(); });
-    add("#", QStringLiteral("50mm 网格 开/关"), false, [this] { canvas_->toggleGrid(); });
-    add("⟙", QStringLiteral("标尺 开/关"), false, [this] { canvas_->toggleRulers(); });
+    add(ic::Icon::CropMarks, QStringLiteral("裁切角线 开/关（裁纸标记）"), false, [this] { canvas_->toggleCropMarks(); });
+    add(ic::Icon::Grid3, QStringLiteral("50mm 网格 开/关"), false, [this] { canvas_->toggleGrid(); });
+    add(ic::Icon::RulerIc, QStringLiteral("标尺 开/关"), false, [this] { canvas_->toggleRulers(); });
 
     // ── 视图缩放 ──
     sep();
-    add("⊕", QStringLiteral("放大 (Cmd+滚轮↑ / Cmd+=)"), false, [this] { canvas_->zoomBy(+10); });
-    add("⊖", QStringLiteral("缩小 (Cmd+滚轮↓ / Cmd+-)"), false, [this] { canvas_->zoomBy(-10); });
-    add("⤢", QStringLiteral("缩放适配窗口"), false, [this] { canvas_->zoomFit(); });
+    add(ic::Icon::ZoomIn,  QStringLiteral("放大 (Cmd+滚轮↑ / Cmd+=)"), false, [this] { canvas_->zoomBy(+10); });
+    add(ic::Icon::ZoomOut, QStringLiteral("缩小 (Cmd+滚轮↓ / Cmd+-)"), false, [this] { canvas_->zoomBy(-10); });
+    add(ic::Icon::FitView, QStringLiteral("缩放适配窗口"), false, [this] { canvas_->zoomFit(); });
     v->addStretch();
     // insert tool done (or cancelled) → revert to 选择
     connect(canvas_, &LayoutCanvas::toolFinished, this, [this] {

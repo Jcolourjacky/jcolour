@@ -27,6 +27,27 @@ enum class Icon {
     Grid,         // 自动拼版
     Minus,        // 缩小
     Plus,         // 放大
+
+    // ── 左工具条（拼版编辑器）──
+    Cursor,       // 选择 / 移动
+    Type,         // 文字
+    QrCode,       // 二维码
+    Hand,         // 抓手平移
+    Measure,      // 测量（对角尺）
+    Copy,         // 复制
+    Copies,       // 份数 ×N（叠层+加号）
+    RotateCw,     // 旋转 90°
+    Trash,        // 删除
+    AlignLeftIc,  // 对齐菜单
+    StepRepeat,   // 步进重复（2×2 网格）
+    ContactSheet, // 联系表（表格）
+    CropMarks,    // 裁切角线
+    Grid3,        // 网格开关
+    RulerIc,      // 标尺开关
+    ZoomIn,       // 放大镜+
+    ZoomOut,      // 放大镜−
+    FitView,      // 缩放适配
+    LinkIc,       // 等比锁定（属性栏）
 };
 
 // Single-colour pixmap rendered in a 24×24 coordinate space, scaled to `px`
