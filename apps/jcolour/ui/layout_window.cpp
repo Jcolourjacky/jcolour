@@ -1353,6 +1353,11 @@ QWidget* LayoutWindow::buildToolbox() {
         v->addWidget(s, 0, Qt::AlignHCenter);
         v->addSpacing(3);
     };
+    // InDesign 式工具提示：加粗名称 (快捷键) + 灰色说明行；悬停即显
+    const auto rich = [](const QString& name, const QString& key, const QString& desc) {
+        return QStringLiteral("<b>%1</b>%2<br/><span style='color:#7c828a'>%3</span>")
+            .arg(name, key.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(key), desc);
+    };
     const auto add = [&](ic::Icon glyph, const QString& tip, bool exclusiveTool,
                          std::function<void()> fn) {
         auto* b = iconBtn(glyph, tip);
@@ -1363,45 +1368,63 @@ QWidget* LayoutWindow::buildToolbox() {
         v->addWidget(b);
         return b;
     };
+    // 点选工具 → 状态栏立即显示工具名（InDesign 观感）
+    const auto announce = [this](const QString& name, const QString& hint) {
+        statusBar()->showMessage(hint.isEmpty() ? name : name + QStringLiteral("　—　") + hint, 5000);
+    };
 
     // ── 工具（互斥选中；V/T/H/K 单键切换与按钮双向同步）──
-    selectToolBtn_ = add(ic::Icon::Cursor, QStringLiteral("选择 / 移动 (V)"), true,
+    selectToolBtn_ = add(ic::Icon::Cursor,
+        rich(QStringLiteral("选择工具"), "V", QStringLiteral("移动、缩放块；双击文字可编辑")), true,
         [this] { canvas_->setTool(CanvasTool::Select); });
     selectToolBtn_->setChecked(true);
-    auto* textBtn = add(ic::Icon::Type, QStringLiteral("文字 (T) — 像 InDesign 一样拖出文本框直接输入"), true, [this] {
-        canvas_->setTool(CanvasTool::Text);
-        statusBar()->showMessage(QStringLiteral("文字工具：在纸上拖出文本框，松手直接输入；双击已有文字可再编辑"), 5000); });
-    auto* qrBtn = add(ic::Icon::QrCode, QStringLiteral("二维码 / 条码"), true, [this] {
-        canvas_->setTool(CanvasTool::Qr);
-        statusBar()->showMessage(QStringLiteral("二维码工具：在纸张上点击放置二维码"), 4000); });
-    auto* handBtn = add(ic::Icon::Hand, QStringLiteral("抓手平移 (H · 按住空格临时切换)"), true, [this] {
-        canvas_->setTool(CanvasTool::Hand); });
-    auto* measBtn = add(ic::Icon::Measure, QStringLiteral("测量 (K · Shift 锁 45°，Esc 清除)"), true, [this] {
-        canvas_->setTool(CanvasTool::Measure);
-        statusBar()->showMessage(QStringLiteral("测量工具：在纸上拖动读取 mm 距离与 Δx/Δy"), 4000); });
+    auto* textBtn = add(ic::Icon::Type,
+        rich(QStringLiteral("文字工具"), "T", QStringLiteral("拖出文本框，松手直接输入")), true,
+        [this] { canvas_->setTool(CanvasTool::Text); });
+    auto* qrBtn = add(ic::Icon::QrCode,
+        rich(QStringLiteral("二维码工具"), {}, QStringLiteral("在纸张上点击放置二维码 / 条码")), true,
+        [this] { canvas_->setTool(CanvasTool::Qr); });
+    auto* handBtn = add(ic::Icon::Hand,
+        rich(QStringLiteral("抓手工具"), "H", QStringLiteral("拖动画布；任何工具下按住空格临时切换")), true,
+        [this] { canvas_->setTool(CanvasTool::Hand); });
+    auto* measBtn = add(ic::Icon::Measure,
+        rich(QStringLiteral("测量工具"), "K", QStringLiteral("拖线读距离；Shift 锁 45°，Esc 清除")), true,
+        [this] { canvas_->setTool(CanvasTool::Measure); });
     {
+        // 按钮点击与 V/T/H/K 键盘切换都经 toolChanged：同步选中态 + 状态栏播报工具名
         const std::array<QToolButton*, 5> tb{selectToolBtn_, textBtn, qrBtn, handBtn, measBtn};
-        connect(canvas_, &LayoutCanvas::toolChanged, this, [tb](CanvasTool t) {
+        connect(canvas_, &LayoutCanvas::toolChanged, this, [this, tb, announce](CanvasTool t) {
             const int i = t == CanvasTool::Select ? 0 : t == CanvasTool::Text ? 1
                         : t == CanvasTool::Qr ? 2 : t == CanvasTool::Hand ? 3 : 4;
             tb[size_t(i)]->setChecked(true);
+            static const char* names[] = {"选择工具 (V)", "文字工具 (T)", "二维码工具",
+                                          "抓手工具 (H)", "测量工具 (K)"};
+            static const char* hints[] = {"", "在纸上拖出文本框，松手直接输入",
+                                          "在纸张上点击放置", "拖动平移画布",
+                                          "拖动读取 mm 距离与 Δx/Δy"};
+            announce(QString::fromUtf8(names[i]), QString::fromUtf8(hints[i]));
         });
     }
 
     // ── 块操作 ──
     sep();
-    add(ic::Icon::Copy, QStringLiteral("复制选中块 (Cmd+D)"), false, [this] { canvas_->duplicateSelected(); });
-    add(ic::Icon::Copies, QStringLiteral("份数… 同图打 N 份并自动排版（ImagePrint 方式）"), false, [this] {
+    add(ic::Icon::Copy, rich(QStringLiteral("复制"), QStringLiteral("Cmd+D"),
+        QStringLiteral("复制选中块，+12mm 错位")), false, [this] { canvas_->duplicateSelected(); });
+    add(ic::Icon::Copies, rich(QStringLiteral("份数…"), {},
+        QStringLiteral("同图打 N 份并自动排版（ImagePrint 方式）")), false, [this] {
         bool ok = false;
         const int n = QInputDialog::getInt(this, QStringLiteral("份数"),
             QStringLiteral("再复制多少份？（复制后自动拼版归位）"), 3, 1, 99, 1, &ok);
         if (!ok) return;
         canvas_->duplicateSelectedN(n);
         runAutoNest(); });                    // ImagePrint：设份数即自动排列
-    add(ic::Icon::RotateCw, QStringLiteral("旋转 90°（省纸拼版常用）"), false, [this] { canvas_->rotateSelected90(); });
-    add(ic::Icon::Trash, QStringLiteral("删除选中块"), false, [this] { canvas_->deleteSelected(); });
+    add(ic::Icon::RotateCw, rich(QStringLiteral("旋转 90°"), {},
+        QStringLiteral("顺时针旋转，省纸拼版常用")), false, [this] { canvas_->rotateSelected90(); });
+    add(ic::Icon::Trash, rich(QStringLiteral("删除"), QStringLiteral("Delete"),
+        QStringLiteral("删除选中块")), false, [this] { canvas_->deleteSelected(); });
     {
-        auto* b = add(ic::Icon::AlignLeftIc, QStringLiteral("对齐（相对纸张）"), false, nullptr);
+        auto* b = add(ic::Icon::AlignLeftIc, rich(QStringLiteral("对齐"), {},
+            QStringLiteral("选中块相对纸张 左/中/右/顶/底 对齐")), false, nullptr);
         auto* menu = new QMenu(b);
         using A = LayoutCanvas::Align;
         const std::pair<QString, A> items[] = {
@@ -1417,8 +1440,10 @@ QWidget* LayoutWindow::buildToolbox() {
 
     // ── 拼版 ──
     sep();
-    add(ic::Icon::Grid, QStringLiteral("自动拼版 / 嵌套"), false, [this] { runAutoNest(); });
-    add(ic::Icon::StepRepeat, QStringLiteral("步进重复…（InDesign「多重复制」方式：作用于选中块）"), false, [this] {
+    add(ic::Icon::Grid, rich(QStringLiteral("自动拼版"), {},
+        QStringLiteral("嵌套排列全部块，省纸")), false, [this] { runAutoNest(); });
+    add(ic::Icon::StepRepeat, rich(QStringLiteral("步进重复…"), {},
+        QStringLiteral("InDesign「多重复制」：选中块铺 行×列")), false, [this] {
         if (canvas_->selected() < 0) {
             statusBar()->showMessage(QStringLiteral("步进重复：请先选中一个块"), 4000);
             return;
@@ -1440,7 +1465,8 @@ QWidget* LayoutWindow::buildToolbox() {
         form->addRow(bb);
         if (dlg.exec() == QDialog::Accepted)
             canvas_->stepRepeatGrid(rows->value(), cols->value(), gx->value(), gy->value()); });
-    add(ic::Icon::ContactSheet, QStringLiteral("联系表 Contact Sheet…"), false, [this] {
+    add(ic::Icon::ContactSheet, rich(QStringLiteral("联系表…"), {},
+        QStringLiteral("多图缩略排版 Contact Sheet")), false, [this] {
         auto* w = new ContactSheetDialog(nullptr);
         w->setAttribute(Qt::WA_DeleteOnClose);
         w->setWindowTitle(QStringLiteral("联系表"));
@@ -1448,15 +1474,21 @@ QWidget* LayoutWindow::buildToolbox() {
 
     // ── 显示开关 ──
     sep();
-    add(ic::Icon::CropMarks, QStringLiteral("裁切角线 开/关（裁纸标记）"), false, [this] { canvas_->toggleCropMarks(); });
-    add(ic::Icon::Grid3, QStringLiteral("50mm 网格 开/关"), false, [this] { canvas_->toggleGrid(); });
-    add(ic::Icon::RulerIc, QStringLiteral("标尺 开/关"), false, [this] { canvas_->toggleRulers(); });
+    add(ic::Icon::CropMarks, rich(QStringLiteral("裁切角线"), {},
+        QStringLiteral("开/关 每块四角的裁纸标记")), false, [this] { canvas_->toggleCropMarks(); });
+    add(ic::Icon::Grid3, rich(QStringLiteral("网格"), {},
+        QStringLiteral("开/关 纸面 50mm 网格")), false, [this] { canvas_->toggleGrid(); });
+    add(ic::Icon::RulerIc, rich(QStringLiteral("标尺"), QStringLiteral("Cmd+R"),
+        QStringLiteral("开/关 标尺；从标尺可拖出参考线")), false, [this] { canvas_->toggleRulers(); });
 
     // ── 视图缩放 ──
     sep();
-    add(ic::Icon::ZoomIn,  QStringLiteral("放大 (Cmd+滚轮↑ / Cmd+=)"), false, [this] { canvas_->zoomBy(+10); });
-    add(ic::Icon::ZoomOut, QStringLiteral("缩小 (Cmd+滚轮↓ / Cmd+-)"), false, [this] { canvas_->zoomBy(-10); });
-    add(ic::Icon::FitView, QStringLiteral("缩放适配窗口"), false, [this] { canvas_->zoomFit(); });
+    add(ic::Icon::ZoomIn,  rich(QStringLiteral("放大"), QStringLiteral("Cmd+= / Cmd+滚轮"),
+        QStringLiteral("锚定光标缩放")), false, [this] { canvas_->zoomBy(+10); });
+    add(ic::Icon::ZoomOut, rich(QStringLiteral("缩小"), QStringLiteral("Cmd+-"),
+        {}), false, [this] { canvas_->zoomBy(-10); });
+    add(ic::Icon::FitView, rich(QStringLiteral("适合窗口"), QStringLiteral("Cmd+0"),
+        {}), false, [this] { canvas_->zoomFit(); });
     v->addStretch();
     // insert tool done (or cancelled) → revert to 选择
     connect(canvas_, &LayoutCanvas::toolFinished, this, [this] {
