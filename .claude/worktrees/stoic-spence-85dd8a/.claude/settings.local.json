@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/Users/jacky/Desktop/colour app/jcolourv2/.claude/worktrees/stoic-spence-85dd8a\" && echo \"=== worktree 根目錄 ===\" && ls -la && echo \"\" && echo \"=== 主專案目錄 ===\" && ls -la \"/Users/jacky/Desktop/colour app/jcolourv2\" 2>/dev/null | head -50)",
+      "Bash(ls -la ui/)",
+      "Bash(ls -la main_sidebar* workflow_sidebar* workspace_center*)",
+      "Bash(ls workflow_sidebar* workflow_selector*)",
+      "Bash(cat workflow_sidebar.h)",
+      "Bash(cat workflow_selector.cpp)",
+      "Bash(cmake --version)",
+      "Read(//opt/homebrew/Cellar/qt/6.9.0/bin/**)",
+      "Bash(/opt/homebrew/opt/qt6/bin/qmake --version)",
+      "Read(//opt/homebrew/Cellar/qt/6.9.0/lib/cmake/Qt6/**)",
+      "Bash(export CMAKE_PREFIX_PATH=/opt/homebrew/opt/qt6:/opt/homebrew)",
+      "Bash(export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/little-cms2/lib/pkgconfig:/opt/homebrew/opt/libtiff/lib/pkgconfig)",
+      "Bash(cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug)",
+      "Bash(cmake --build build --target jcolour-ui -j8)",
+      "Bash(./build/jcolour-ui.app/Contents/MacOS/jcolour-ui)"
+    ]
+  }
+}

@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jcolour</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:"Helvetica Neue",Arial,"PingFang TC","Microsoft JhengHei",sans-serif;font-size:11px;background:transparent;}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+
+.app{display:flex;flex-direction:column;width:100%;height:720px;border:1px solid #b7bbbf;border-radius:8px;overflow:hidden;background:#ececee;color:#2b2e33;}
+
+/* ── title bar ── */
+.titlebar{height:26px;flex-shrink:0;background:linear-gradient(#f7f7f8,#ececee);border-bottom:1px solid #d2d5d9;display:flex;align-items:center;padding:0 10px;}
+.win-dots{display:flex;gap:5px;margin-right:10px;}
+.wd{width:11px;height:11px;border-radius:50%;}
+.app-title{font-size:11px;color:#6b7079;flex:1;text-align:center;font-weight:600;}
+
+/* ── menubar ── */
+.menubar{height:22px;flex-shrink:0;background:#eef0f2;border-bottom:1px solid #d2d5d9;display:flex;align-items:center;padding:0 6px;}
+.mb{padding:0 8px;height:22px;display:flex;align-items:center;font-size:11px;color:#4a4e55;cursor:pointer;border-radius:2px;}
+.mb:hover{background:#dde1e6;color:#23262b;}
+
+/* ── std toolbar ── */
+.stdbar{height:28px;flex-shrink:0;background:#e7e8ea;border-bottom:1px solid #d2d5d9;display:flex;align-items:center;padding:0 5px;gap:1px;}
+.sb{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:2px;cursor:pointer;color:#5a5f66;border:0.5px solid transparent;flex-shrink:0;}
+.sb:hover{background:#fff;border-color:#c4c9d0;color:#23262b;}
+.sb.on{background:#fff;border-color:#c4c9d0;color:#2e7dd7;}
+.sb i{font-size:14px;}
+.sbs{width:1px;height:15px;background:#cfd2d6;margin:0 3px;flex-shrink:0;}
+.sb-lbl{font-size:10px;color:#6b7079;margin:0 3px;flex-shrink:0;white-space:nowrap;}
+.sb-sel{height:20px;background:#fff;border:1px solid #c4c9d0;border-radius:3px;color:#2b2e33;font-size:10px;font-family:inherit;padding:0 4px;outline:none;flex-shrink:0;}
+.std-right{margin-left:auto;display:flex;align-items:center;gap:4px;}
+.print-btn{display:flex;align-items:center;gap:4px;padding:0 10px;height:22px;background:#2e7dd7;color:#fff;border-radius:4px;font-size:10px;cursor:pointer;flex-shrink:0;font-weight:600;}
+.print-btn:hover{background:#1f5fa8;}
+.print-btn i{font-size:13px;}
+
+/* ══ PROPERTY BAR — two rows, light, compact ══ */
+.propbar{display:flex;flex-direction:column;flex-shrink:0;background:#e7e8ea;border-bottom:1px solid #d2d5d9;}
+.pb-row{height:19px;display:flex;align-items:center;padding:0 4px;border-bottom:0.5px solid #dadde1;overflow:hidden;}
+.pb-row:last-child{border-bottom:none;}
+.lbl{font-size:9px;color:#6b7079;flex-shrink:0;margin-right:1px;white-space:nowrap;}
+.nf{display:inline-flex;align-items:center;height:15px;flex-shrink:0;}
+.ni{height:15px;background:#fff;border:1px solid #c4c9d0;border-right:none;border-radius:2px 0 0 2px;color:#2b2e33;font-size:9px;font-family:inherit;text-align:right;padding:0 2px;outline:none;}
+.ni:focus{border-color:#2e7dd7;}
+.ni.w44{width:44px;}.ni.w36{width:36px;}.ni.w30{width:30px;}.ni.w26{width:26px;}
+.spins{display:flex;flex-direction:column;width:10px;height:15px;flex-shrink:0;}
+.su,.sd{flex:1;width:10px;background:#eceef1;border:1px solid #c4c9d0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:5px;color:#8a8f96;user-select:none;}
+.su{border-radius:0 2px 0 0;border-bottom:none;}
+.sd{border-radius:0 0 2px 0;}
+.su:hover,.sd:hover{background:#dde1e6;color:#444;}
+.chain{display:inline-flex;align-items:center;justify-content:center;width:10px;height:19px;cursor:pointer;color:#a3a8b0;font-size:8px;flex-shrink:0;}
+.chain.on{color:#2e7dd7;}
+.psep{display:inline-block;width:1px;height:13px;background:#cfd2d6;margin:0 2px;flex-shrink:0;}
+.ib{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border:0.5px solid transparent;border-radius:2px;cursor:pointer;color:#5a5f66;flex-shrink:0;}
+.ib:hover,.ib.on{background:#fff;border-color:#c4c9d0;color:#2e7dd7;}
+.ib i{font-size:12px;}
+.origin{display:inline-grid;grid-template-columns:repeat(3,4px);grid-template-rows:repeat(3,4px);gap:1px;cursor:pointer;flex-shrink:0;margin-right:2px;align-self:center;}
+.od{width:4px;height:4px;border-radius:50%;background:#b3b8bf;}
+.od.on{background:#2e7dd7;}
+.psel{height:15px;background:#fff;border:1px solid #c4c9d0;border-radius:2px;color:#2b2e33;font-size:9px;font-family:inherit;padding:0 2px;outline:none;flex-shrink:0;}
+.mdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.mode-sel{height:15px;background:#fff;border:1px solid #c4c9d0;border-radius:2px;color:#2b2e33;font-size:9px;font-family:inherit;padding:0 2px;outline:none;min-width:68px;flex-shrink:0;}
+.pfc{display:inline-flex;align-items:center;gap:2px;height:13px;padding:0 4px;border-radius:2px;font-size:8px;font-weight:600;cursor:pointer;border:1px solid;flex-shrink:0;}
+.pfc.warn{background:#fbf2dd;border-color:#e6c878;color:#8a6310;}
+.swatch-bar{width:44px;height:12px;border:1px solid #c4c9d0;border-radius:2px;background:linear-gradient(90deg,#000 50%,#fff 50%);flex-shrink:0;}
+.chk-row{display:inline-flex;align-items:center;gap:2px;font-size:9px;color:#6b7079;flex-shrink:0;cursor:pointer;}
+.chk-row input{width:10px;height:10px;accent-color:#2e7dd7;}
+
+/* ── workspace ── */
+.workspace{display:flex;flex:1;overflow:hidden;min-height:0;}
+
+.toolbox{width:34px;flex-shrink:0;background:#eef0f2;border-right:1px solid #d2d5d9;display:flex;flex-direction:column;align-items:center;padding:5px 0;gap:2px;}
+.tic{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;color:#6b7079;border:0.5px solid transparent;}
+.tic:hover,.tic.on{background:#fff;border-color:#c4c9d0;color:#2e7dd7;}
+.tic i{font-size:15px;}
+.tdiv{width:16px;height:1px;background:#d2d5d9;margin:2px 0;}
+
+.canvas-wrap{flex:1;background:repeating-conic-gradient(#dfe1e4 0% 25%,#e9ebee 0% 50%) 0/22px 22px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.ruler-h{position:absolute;top:0;left:18px;right:0;height:18px;background:#eef0f2;border-bottom:1px solid #d2d5d9;overflow:hidden;}
+.ruler-v{position:absolute;top:18px;left:0;width:18px;bottom:0;background:#eef0f2;border-right:1px solid #d2d5d9;overflow:hidden;}
+.r-corner{position:absolute;top:0;left:0;width:18px;height:18px;background:#eef0f2;border-right:1px solid #d2d5d9;border-bottom:1px solid #d2d5d9;}
+.rtick{font-size:7px;color:#969ba3;position:absolute;bottom:2px;}
+.canvas-scroll{position:absolute;top:18px;left:18px;right:0;bottom:0;overflow:auto;display:flex;padding:16px;}
+.paper{background:#fff;position:relative;width:80%;aspect-ratio:609.6 / 914.4;flex-shrink:0;margin:auto;border:1px solid rgba(0,0,0,.12);box-shadow:0 4px 18px rgba(0,0,0,.14);}
+.ruler-v .rtick{bottom:auto;left:3px;writing-mode:vertical-rl;text-orientation:mixed;}
+.paper-lbl{position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:7px;color:rgba(0,0,0,.32);white-space:nowrap;}
+.blk{position:absolute;cursor:move;}
+.blk.sel{outline:1.5px solid #2e7dd7;}
+.blk.sel::after{content:'';position:absolute;inset:-5px;border:1px dashed rgba(46,125,215,.45);pointer-events:none;}
+.blk-bg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
+.blk-lbl{position:absolute;bottom:-13px;left:0;right:0;font-size:7px;color:rgba(0,0,0,.5);text-align:center;white-space:nowrap;}
+.hnd{position:absolute;width:6px;height:6px;background:#2e7dd7;border:1px solid #fff;border-radius:50%;box-shadow:0 0 2px rgba(0,0,0,.3);}
+.hnd.tl{top:-3px;left:-3px;}.hnd.tr{top:-3px;right:-3px;}
+.hnd.bl{bottom:-3px;left:-3px;}.hnd.br{bottom:-3px;right:-3px;}
+.hnd.tm{top:-3px;left:calc(50% - 3px);}.hnd.bm{bottom:-3px;left:calc(50% - 3px);}
+.hnd.ml{top:calc(50% - 3px);left:-3px;}.hnd.mr{top:calc(50% - 3px);right:-3px;}
+.snap-guide{position:absolute;left:0;right:0;height:0.5px;background:rgba(46,125,215,.4);}
+.util-tag{position:absolute;bottom:6px;right:7px;font-size:8px;color:#fff;background:rgba(0,0,0,.55);padding:1px 6px;border-radius:3px;}
+.zoom-bar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:5px;background:#fff;border:1px solid #d2d5d9;border-radius:6px;padding:3px 8px;box-shadow:0 2px 6px rgba(0,0,0,.12);}
+.zm-btn{cursor:pointer;color:#6b7079;font-size:13px;line-height:1;padding:0 2px;}
+.zm-btn:hover{color:#2b2e33;}
+.zm-val{font-size:10px;color:#3b3f46;min-width:28px;text-align:center;}
+
+.rpanel{width:192px;flex-shrink:0;background:#f5f6f7;border-left:1px solid #d2d5d9;display:flex;flex-direction:column;overflow-y:auto;}
+.rpanel::-webkit-scrollbar{width:6px;}
+.rpanel::-webkit-scrollbar-track{background:#eef0f2;}
+.rpanel::-webkit-scrollbar-thumb{background:#c4c9d0;border-radius:3px;}
+.rp-tabs{display:flex;border-bottom:1px solid #d2d5d9;flex-shrink:0;background:#e7e8ea;}
+.rp-tab{flex:1;height:26px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#6b7079;cursor:pointer;border-bottom:1.5px solid transparent;margin-bottom:-0.5px;}
+.rp-tab.on{color:#23262b;border-bottom-color:#2e7dd7;background:#f5f6f7;font-weight:600;}
+.rp-hd{padding:5px 10px 3px;font-size:9px;font-weight:600;color:#868c95;letter-spacing:.06em;text-transform:uppercase;border-bottom:0.5px solid #e6e8eb;background:#eef0f2;}
+.rp-row{display:flex;align-items:center;justify-content:space-between;padding:4px 10px;font-size:10px;}
+.rp-k{color:#6b7079;}
+.rp-v{font-weight:500;color:#2b2e33;}
+.rp-v.warn{color:#c2861a;}
+.rp-v.ok{color:#2f8c4f;}
+.rp-sel{width:100%;height:18px;background:#fff;border:1px solid #c4c9d0;border-radius:3px;color:#2b2e33;font-size:10px;font-family:inherit;padding:0 4px;outline:none;margin-top:3px;}
+.rp-body{padding:4px 10px 8px;}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px;}
+.mode-btn{height:20px;background:#fff;border:1px solid #d2d5d9;border-radius:4px;font-size:9px;color:#5a5f66;display:flex;align-items:center;justify-content:center;cursor:pointer;gap:2px;position:relative;}
+.stale-dot{position:absolute;top:2px;right:3px;width:6px;height:6px;border-radius:50%;background:#c0392b;box-shadow:0 0 0 1.5px #fff;}
+.mode-btn.on{border-color:#2e7dd7;background:#eaf2fc;color:#1f5fa8;font-weight:600;}
+.mds{width:6px;height:6px;border-radius:50%;}
+.pf-row{display:flex;align-items:center;gap:5px;padding:3px 10px;font-size:10px;}
+.pf-ok{color:#2f8c4f;font-size:12px;}
+.pf-wn{color:#c2861a;font-size:12px;}
+.pf-t{flex:1;color:#4a4e55;}
+.pf-fx{font-size:9px;padding:1px 5px;background:#fff;border:1px solid #c4c9d0;border-radius:3px;color:#4a4e55;cursor:pointer;}
+.pf-fx:hover{background:#eef0f2;}
+.qs-item{display:flex;align-items:center;gap:6px;padding:5px 10px;cursor:pointer;font-size:10px;border-bottom:0.5px solid #e6e8eb;}
+.qs-item:hover{background:#eef0f2;}
+.qs-item.on{background:#eaf2fc;}
+.qs-dots{display:flex;gap:2px;}
+.qs-dot{width:7px;height:7px;border-radius:50%;}
+.qs-name{flex:1;color:#2b2e33;}
+
+/* ── job strip ── */
+.jobstrip{height:58px;flex-shrink:0;background:#eef0f2;border-top:1px solid #d2d5d9;display:flex;align-items:center;padding:0 7px;gap:5px;overflow-x:auto;}
+.jobstrip::-webkit-scrollbar{height:5px;}
+.jobstrip::-webkit-scrollbar-track{background:#e3e5e8;}
+.jobstrip::-webkit-scrollbar-thumb{background:#c4c9d0;border-radius:3px;}
+.jt{width:40px;height:48px;border-radius:5px;border:1.5px solid transparent;cursor:pointer;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.14);}
+.jt.on{border-color:#2e7dd7;}
+.jt-img{flex:1;display:flex;align-items:center;justify-content:center;}
+.jt-lbl{height:12px;font-size:7px;color:#6b7079;background:#fff;border-top:0.5px solid #e6e8eb;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0 2px;}
+.jt-add{width:40px;height:48px;border-radius:5px;border:1px dashed #b9c2cc;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;flex-shrink:0;}
+.jt-add i{font-size:14px;color:#2e7dd7;}
+.jt-add span{font-size:7px;color:#6b7079;}
+.js-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+
+/* ── statusbar ── */
+.statusbar{height:22px;flex-shrink:0;background:#eef0f2;border-top:1px solid #d2d5d9;display:flex;align-items:center;padding:0 10px;gap:8px;}
+.sc{display:flex;align-items:center;gap:3px;font-size:9px;color:#6b7079;}
+.dot{width:5px;height:5px;border-radius:50%;}
+.dot.ok{background:#2f8c4f;}.dot.warn{background:#d97706;}.dot.gr{background:#c4c9d0;}
+.ssep{width:1px;height:11px;background:#d2d5d9;}
+.sr{margin-left:auto;font-size:9px;color:#969ba3;}
+
+/* ══ ErgoSoft 印製環境 (Print Environment) ══ */
+.sb-sel.env-sel{min-width:148px;color:#1f5fa8;border-color:#bcd4f2;background:#eaf2fc;font-weight:600;}
+.env-chip{display:inline-flex;align-items:center;gap:2px;height:18px;padding:0 5px;border-radius:4px;background:#fff;border:1px solid #d2d5d9;color:#6b7079;font-size:9px;flex-shrink:0;margin-left:3px;white-space:nowrap;}
+.env-chip i{font-size:10px;}
+.env-chip.ok{background:#e8f5ec;border-color:#bfe3c9;color:#1d6b39;}
+.env-chip.warn{background:#fbf2dd;border-color:#e6c878;color:#8a6310;}
+
+/* ══ 出墨控制 traffic-light (ErgoSoft PrintClient) ══ */
+.tl{display:inline-flex;align-items:center;gap:3px;background:#fff;border:1px solid #d2d5d9;border-radius:5px;padding:2px 6px;flex-shrink:0;}
+.tl-d{width:9px;height:9px;border-radius:50%;cursor:pointer;opacity:.3;}
+.tl-d.on{opacity:1;box-shadow:0 0 0 2px rgba(0,0,0,.06);}
+.tl-d.g{background:#28c840;}
+.tl-d.y{background:#febc2e;}
+.tl-d.r{background:#ff5f57;}
+.tl-lbl{font-size:8px;color:#6b7079;margin-left:1px;white-space:nowrap;}
+
+/* ══ RIP 佇列 lanes ══ */
+.q-lane{padding:5px 10px 6px;border-bottom:0.5px solid #e6e8eb;}
+.q-lane-hd{display:flex;align-items:center;gap:5px;font-size:9px;color:#6b7079;margin-bottom:4px;letter-spacing:.04em;font-weight:600;}
+.q-lane-hd .dot{width:6px;height:6px;border-radius:50%;}
+.q-cnt{margin-left:auto;color:#969ba3;font-weight:500;}
+.q-job{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:10px;color:#3b3f46;border-radius:3px;}
+.q-job:hover{background:#eef0f2;}
+.q-job .qn{flex-shrink:0;width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.q-bar{flex:1;height:4px;background:#e3e5e8;border-radius:2px;overflow:hidden;}
+.q-bar i{display:block;height:100%;background:#2e7dd7;}
+.q-pct{font-size:9px;color:#6b7079;width:32px;text-align:right;flex-shrink:0;}
+.cm-hint{font-size:9px;color:#1f5fa8;background:#eaf2fc;border:1px solid #cfe0f4;border-radius:4px;padding:5px 7px;line-height:1.5;margin-top:6px;}
+.cm-hint b{color:#1a4f8c;}
+
+/* ══ 印製環境庫 items ══ */
+.qs-mid{flex:1;min-width:0;}
+.qs-mid .qs-name{display:block;color:#2b2e33;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.qs-sub{font-size:8px;color:#868c95;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.qs-badge{font-size:8px;padding:1px 5px;border-radius:4px;flex-shrink:0;white-space:nowrap;}
+.qs-badge.ok{background:#e8f5ec;border:1px solid #bfe3c9;color:#1d6b39;}
+.qs-badge.warn{background:#fbf2dd;border:1px solid #e6c878;color:#8a6310;}
+.qs-badge.bad{background:#fbe9e7;border:1px solid #f0c0ba;color:#9a2418;}
+body{background:#c9ccd1;padding:14px;}
+.app{max-width:1100px;margin:0 auto;}
+
+/* ══ 文字屬性列 (text/paragraph property bar) ══ */
+.ptag{font-size:10px;font-weight:700;color:#4a4e55;flex-shrink:0;margin:0 3px 0 1px;}
+.tf{height:15px;background:#fff;border:1px solid #c4c9d0;border-radius:2px;color:#2b2e33;font-size:9px;font-family:inherit;padding:0 3px;outline:none;flex-shrink:0;}
+.tf:focus{border-color:#2e7dd7;}
+.tnum{display:inline-flex;align-items:center;height:15px;flex-shrink:0;}
+.tnum .tf{border-right:none;border-radius:2px 0 0 2px;text-align:right;}
+.tf.w44{width:44px;}.tf.w36{width:36px;}.tf.w30{width:30px;}
+.tsel{height:15px;background:#fff;border:1px solid #c4c9d0;border-radius:2px;color:#2b2e33;font-size:9px;font-family:inherit;padding:0 2px;outline:none;flex-shrink:0;}
+.tsel:focus{border-color:#2e7dd7;}
+
+/* ══ 工具箱擴充 + 各功能屬性列共用件 ══ */
+.toolbox{padding:4px 0;gap:1px;}
+.tic{width:24px;height:24px;}
+.tic i{font-size:14px;}
+.tdiv{margin:1px 0;}
+.qswatch{width:14px;height:14px;border-radius:2px;flex-shrink:0;margin-right:2px;}
+.crepl{width:18px;height:14px;border-radius:2px;flex-shrink:0;border:1px solid #c4c9d0;}
+.pbtn{height:15px;display:inline-flex;align-items:center;gap:3px;padding:0 6px;background:#fff;border:1px solid #c4c9d0;border-radius:3px;font-size:9px;color:#4a4e55;cursor:pointer;flex-shrink:0;white-space:nowrap;}
+.pbtn:hover{background:#eef0f2;}
+.pbtn.pri{background:#2e7dd7;border-color:#2e7dd7;color:#fff;}
+.seg-mini{display:inline-flex;border:1px solid #c4c9d0;border-radius:3px;overflow:hidden;flex-shrink:0;}
+.seg-mini span{font-size:9px;padding:2px 6px;color:#4a4e55;cursor:pointer;border-right:1px solid #c4c9d0;background:#fff;}
+.seg-mini span:last-child{border-right:none;}
+.seg-mini span.on{background:#eaf2fc;color:#1f5fa8;font-weight:600;}
+.propbar{position:relative;}
+.origin.center2{position:absolute;left:5px;top:50%;transform:translateY(-50%);z-index:2;}
+.og-gutter{width:16px;flex-shrink:0;margin-right:2px;}
+
+/* ══ 打印环境管理器 modal（连接 打印机/线性/色彩管理 的枢纽）══ */
+.modal-ov{position:fixed;inset:0;background:rgba(20,24,30,.45);display:none;align-items:center;justify-content:center;z-index:200;}
+.modal-ov.on{display:flex;}
+.envmgr{width:780px;max-width:94vw;height:566px;max-height:92vh;background:#f5f6f7;border:1px solid #b7bbbf;border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden;}
+.em-hd{height:40px;flex-shrink:0;background:linear-gradient(#f7f7f8,#ececee);border-bottom:1px solid #d2d5d9;display:flex;align-items:center;padding:0 14px;font-size:13px;font-weight:700;color:#23262b;}
+.em-hd .x{margin-left:auto;cursor:pointer;color:#6b7079;font-size:15px;}
+.em-body{flex:1;display:flex;min-height:0;}
+.em-left{width:236px;flex-shrink:0;border-right:1px solid #d2d5d9;background:#eef0f2;display:flex;flex-direction:column;}
+.em-tools{display:flex;gap:4px;padding:8px;flex-wrap:wrap;border-bottom:1px solid #d2d5d9;}
+.em-list{flex:1;overflow:auto;}
+.em-right{flex:1;overflow:auto;padding:14px 16px;}
+.em-sec{background:#fff;border:1px solid #d2d5d9;border-radius:8px;padding:10px 12px;margin-bottom:10px;}
+.em-sec h5{font-size:11px;font-weight:700;color:#23262b;margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.em-sec h5 .tag{font-size:8.5px;font-weight:600;padding:1px 6px;border-radius:4px;background:#eaf2fc;color:#1f5fa8;margin-left:auto;}
+.em-kv{display:flex;justify-content:space-between;font-size:10.5px;padding:3px 0;color:#3b3f46;gap:8px;}
+.em-kv .k{color:#6b7079;flex-shrink:0;}
+.em-note{font-size:9px;color:#6b7079;margin-top:5px;line-height:1.5;}
+.pipe{display:flex;align-items:flex-start;margin:6px 0 2px;}
+.pipe .st{flex:1;text-align:center;position:relative;padding:0 2px;}
+.pipe .st .dot{width:22px;height:22px;border-radius:50%;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid;position:relative;z-index:1;}
+.pipe .st.done .dot{background:#2f8c4f;border-color:#2f8c4f;color:#fff;}
+.pipe .st.cur .dot{background:#eaf2fc;border-color:#2e7dd7;color:#1f5fa8;}
+.pipe .st.todo .dot{background:#fff;border-color:#c4c9d0;color:#a3a8b0;}
+.pipe .st .lb{font-size:8px;color:#4a4e55;line-height:1.25;}
+.pipe .st::after{content:"";position:absolute;top:10px;left:62%;right:-38%;height:2px;background:#d2d5d9;z-index:0;}
+.pipe .st:last-child::after{display:none;}
+.pipe .st.done::after{background:#2f8c4f;}
+.wz-step{display:flex;gap:10px;padding:9px 4px;border-bottom:0.5px solid #e6e8eb;align-items:flex-start;}
+.wz-step .n{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid;}
+.wz-step.done .n{background:#2f8c4f;border-color:#2f8c4f;color:#fff;}
+.wz-step.cur .n{background:#eaf2fc;border-color:#2e7dd7;color:#1f5fa8;}
+.wz-step.todo .n{background:#fff;border-color:#c4c9d0;color:#a3a8b0;}
+.wz-step .tt{font-size:11.5px;font-weight:600;color:#23262b;}
+.wz-step .ss{font-size:9.5px;color:#6b7079;margin-top:1px;line-height:1.4;}
+.wz-step .bdg{font-size:8.5px;font-weight:600;padding:1px 6px;border-radius:4px;margin-left:auto;flex-shrink:0;}
+.cmode-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid #e6e8eb;font-size:10.5px;}
+.cmode-row:last-child{border-bottom:none;}
+.cmode-row .mn{width:62px;flex-shrink:0;font-weight:700;color:#23262b;}
+.cmode-row .dep{flex:1;color:#6b7079;font-size:9.5px;}
+.cmode-row .dep b{color:#1f5fa8;}
+.cmode-row .stt{font-size:8.5px;font-weight:600;padding:1px 6px;border-radius:4px;flex-shrink:0;}
+.cmode-chk{font-size:9px;padding:2px 8px;border:1px solid #c4c9d0;border-radius:4px;background:#fff;color:#4a4e55;cursor:pointer;flex-shrink:0;}
+.cmode-chk:hover{background:#eef0f2;}
+.adj-hd{font-size:9px;color:#868c95;font-weight:700;margin:9px 0 4px;letter-spacing:.03em;}
+.adj-lbl{font-size:9px;color:#868c95;margin:5px 0 2px;}
+.adj-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:#3b3f46;padding:3px 0;}
+.rsl{width:104px;accent-color:#2e7dd7;height:14px;flex-shrink:0;}
+.ogv{display:flex;align-items:center;gap:6px;font-size:9.5px;color:#6b7079;padding:2px 0;}
+.ogv .ol{width:18px;flex-shrink:0;font-weight:600;color:#4a4e55;}
+.ogvb{flex:1;height:5px;background:#e3e5e8;border-radius:3px;overflow:hidden;}
+.ogvb i{display:block;height:100%;background:#2e7dd7;}
+.ogv .ov{width:30px;text-align:right;flex-shrink:0;}
+</style>
+</head>
+<body>
+
+<h2 class="sr-only">jcolour 完整应用界面</h2>
+
+<div class="app">
+
+  <!-- title bar -->
+  <div class="titlebar">
+    <div class="win-dots">
+      <div class="wd" style="background:#ff5f57;"></div>
+      <div class="wd" style="background:#febc2e;"></div>
+      <div class="wd" style="background:#28c840;"></div>
+    </div>
+    <span class="app-title">jcolour — exhibition_2026.jcp</span>
+  </div>
+
+  <!-- menubar -->
+  <div class="menubar">
+    <span class="mb">文件</span><span class="mb">编辑</span><span class="mb">视图</span>
+    <span class="mb">对象</span><span class="mb">排列</span><span class="mb">色彩</span>
+    <span class="mb">工具</span><span class="mb">帮助</span>
+  </div>
+
+  <!-- std toolbar -->
+  <div class="stdbar">
+    <div class="sb"><i class="ti ti-file" aria-hidden="true"></i></div>
+    <div class="sb"><i class="ti ti-folder" aria-hidden="true"></i></div>
+    <div class="sb"><i class="ti ti-device-floppy" aria-hidden="true"></i></div>
+    <div class="sbs"></div>
+    <div class="sb"><i class="ti ti-arrow-back-up" aria-hidden="true"></i></div>
+    <div class="sb"><i class="ti ti-arrow-forward-up" aria-hidden="true"></i></div>
+    <div class="sbs"></div>
+    <div class="sb"><i class="ti ti-photo-plus" aria-hidden="true"></i></div>
+    <div class="sbs"></div>
+    <div class="sb on" title="软打样"><i class="ti ti-eye" aria-hidden="true"></i></div>
+    <div class="sb" onclick="this.classList.toggle('on')" title="色域警告"><i class="ti ti-alert-triangle" aria-hidden="true"></i></div>
+    <div class="sbs"></div>
+    <div class="sb" title="自动拼版"><i class="ti ti-layout-grid" aria-hidden="true"></i></div>
+    <div class="sb"><i class="ti ti-layout-distribute-vertical" aria-hidden="true"></i></div>
+    <div class="sbs"></div>
+    <span class="sb-lbl">打印机</span>
+    <select class="sb-sel env-sel" title="① 先选打印机">
+      <option>Epson SC-P9500</option>
+      <option>Epson SC-P7500</option>
+      <option>Epson SC-P9000</option>
+    </select>
+    <span class="sb-lbl">纸张</span>
+    <select class="sb-sel" style="min-width:150px;" title="② 再选纸张名称">
+      <option>Hahnemühle Photo Rag 308</option>
+      <option>Canson Baryta 310</option>
+      <option>Epson Legacy Fibre</option>
+    </select>
+    <span class="sb-lbl">尺寸</span>
+    <select class="sb-sel" title="③ 再选纸张尺寸 / 卷宽">
+      <option>24″ × 36″</option><option>17″ × 22″</option><option>13″ × 19″</option><option>24″ 卷宽</option><option>44″ 卷宽</option>
+    </select>
+    <div class="sbs"></div>
+    <span class="env-chip" onclick="openEnvMgr()" style="cursor:pointer;color:#1f5fa8;border-color:#bcd4f2;background:#eaf2fc;"><i class="ti ti-adjustments-cog" aria-hidden="true"></i>打印环境 / 校准…</span>
+    <div class="std-right">
+      <div class="sb" title="Quick Sets"><i class="ti ti-bolt" aria-hidden="true"></i></div>
+      <div class="sb" title="建档校准 / 打印环境" onclick="openEnvMgr(true)"><i class="ti ti-target" aria-hidden="true"></i></div>
+      <div class="sb" title="记录"><i class="ti ti-history" aria-hidden="true"></i></div>
+      <div class="sb" title="设定"><i class="ti ti-settings" aria-hidden="true"></i></div>
+      <div class="sbs"></div>
+      <div class="print-btn" title="打印整版 → 送 RIP 队列"><i class="ti ti-printer" aria-hidden="true"></i>打印</div>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (物件/圖片) — 2 rows light compact -->
+  <div class="propbar" id="propbar-obj">
+    <div class="origin center2" id="og">
+      <div class="od"></div><div class="od"></div><div class="od"></div>
+      <div class="od"></div><div class="od on"></div><div class="od"></div>
+      <div class="od"></div><div class="od"></div><div class="od"></div>
+    </div>
+    <!-- ROW 1 -->
+    <div class="pb-row">
+      <div class="og-gutter"></div>
+      <span class="lbl">X:</span>
+      <div class="nf"><input class="ni w44" id="px" value="16 毫米"><div class="spins"><div class="su" onclick="nudge('px',1)">▲</div><div class="sd" onclick="nudge('px',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">宽:</span>
+      <div class="nf"><input class="ni w44" id="pw" value="286 毫米"><div class="spins"><div class="su" onclick="nudge('pw',1)">▲</div><div class="sd" onclick="nudge('pw',-1)">▼</div></div></div>
+      <div class="chain on" id="wh" onclick="this.classList.toggle('on')"><i class="ti ti-link" aria-hidden="true" style="font-size:8px;"></i></div>
+      <div class="psep"></div>
+      <div class="nf"><input class="ni w30" id="psx" value="100%"><div class="spins"><div class="su" onclick="nudge('psx',5)">▲</div><div class="sd" onclick="nudge('psx',-5)">▼</div></div></div>
+      <select class="psel" style="margin-left:1px;width:18px;"><option>↕</option></select>
+      <div class="psep"></div>
+      <div class="nf"><input class="ni w26" id="prot" value="0°"><div class="spins"><div class="su" onclick="rot(90)">▲</div><div class="sd" onclick="rot(-90)">▼</div></div></div>
+      <div class="ib" onclick="rot(90)"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i></div>
+      <div class="ib" onclick="rot(-90)"><i class="ti ti-rotate" aria-hidden="true"></i></div>
+      <div style="font-size:11px;font-weight:700;color:#969ba3;margin:0 2px;font-family:serif;flex-shrink:0;">P</div>
+      <div class="ib"><i class="ti ti-layout-distribute-horizontal" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-layout-distribute-vertical" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <div class="ib"><i class="ti ti-align-left" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-center" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-right" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-justified" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <div class="nf"><input class="ni w30" id="psp" value="0.283"><div class="spins"><div class="su" onclick="nudge('psp',0.1)">▲</div><div class="sd" onclick="nudge('psp',-0.1)">▼</div></div></div>
+      <span class="lbl" style="margin-left:2px;">fx</span>
+      <div class="psep"></div>
+      <div class="ib"><i class="ti ti-layout-align-left" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-layout-align-center" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-layout-align-right" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-layout-align-top" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-layout-align-middle" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-layout-align-bottom" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <div class="pfc warn" id="pfc" onclick="goPreflight()" title="点击查看预检清单"><i class="ti ti-alert-triangle" aria-hidden="true"></i><span id="pfc-t">1 警告</span></div>
+    </div>
+    <!-- ROW 2 -->
+    <div class="pb-row">
+      <div style="width:16px;flex-shrink:0;margin-right:2px;"></div>
+      <span class="lbl">Y:</span>
+      <div class="nf"><input class="ni w44" id="py" value="17 毫米"><div class="spins"><div class="su" onclick="nudge('py',1)">▲</div><div class="sd" onclick="nudge('py',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">H:</span>
+      <div class="nf"><input class="ni w44" id="ph" value="380 毫米"><div class="spins"><div class="su" onclick="nudge('ph',1)">▲</div><div class="sd" onclick="nudge('ph',-1)">▼</div></div></div>
+      <div style="width:10px;flex-shrink:0;"></div>
+      <div class="psep"></div>
+      <div class="nf"><input class="ni w30" id="psy" value="100%"><div class="spins"><div class="su" onclick="nudge('psy',5)">▲</div><div class="sd" onclick="nudge('psy',-5)">▼</div></div></div>
+      <select class="psel" style="margin-left:1px;width:18px;"><option>↕</option></select>
+      <div class="psep"></div>
+      <div class="nf"><input class="ni w26" id="psk" value="0°"><div class="spins"><div class="su" onclick="nudge('psk',1)">▲</div><div class="sd" onclick="nudge('psk',-1)">▼</div></div></div>
+      <div class="ib" id="fh" onclick="this.classList.toggle('on')"><i class="ti ti-flip-horizontal" aria-hidden="true"></i></div>
+      <div class="ib" id="fv" onclick="this.classList.toggle('on')"><i class="ti ti-flip-vertical" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <div class="mdot" id="md0" style="background:#333;margin-right:1px;"></div>
+      <div class="mdot" id="md1" style="background:#888;margin-right:1px;"></div>
+      <div class="mdot" id="md2" style="background:#bbb;margin-right:2px;"></div>
+      <select class="mode-sel" id="cmode" onchange="updateMode()">
+        <option value="mono4">四色黑</option>
+        <option value="mono1">单黑</option>
+        <option value="bwc">黑白+彩色</option>
+        <option value="rgb">RGB</option>
+        <option value="pp">ProPhoto RGB</option>
+      </select>
+      <div class="psep"></div>
+      <div class="swatch-bar"></div>
+      <div class="ib" style="width:12px;"><i class="ti ti-chevron-right" aria-hidden="true" style="font-size:9px;"></i></div>
+      <div class="psep"></div>
+      <div class="nf"><input class="ni w30" id="popac" value="100%"><div class="spins"><div class="su" onclick="nudge('popac',5)">▲</div><div class="sd" onclick="nudge('popac',-5)">▼</div></div></div>
+      <div class="ib" style="width:12px;"><i class="ti ti-chevron-down" aria-hidden="true" style="font-size:9px;"></i></div>
+      <div class="psep"></div>
+      <div class="ib on"><i class="ti ti-eye" aria-hidden="true"></i></div>
+      <div class="ib" onclick="this.classList.toggle('on')"><i class="ti ti-alert-triangle" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <div class="chk-row"><input type="checkbox" id="aa"><label for="aa" style="font-size:9px;color:#6b7079;cursor:pointer;">自动调整</label></div>
+      <div class="psep"></div>
+      <div class="ib" onclick="this.classList.toggle('on')"><i class="ti ti-cut" aria-hidden="true"></i></div>
+      <div class="ib" onclick="this.classList.toggle('on')"><i class="ti ti-border-outer" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-chart-bar" aria-hidden="true"></i></div>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (文字) — 选择文字时显示 -->
+  <div class="propbar" id="propbar-txt" style="display:none;">
+    <!-- ROW 1 · 字符 -->
+    <div class="pb-row">
+      <span class="ptag">字</span>
+      <i class="ti ti-search" aria-hidden="true" style="font-size:9px;color:#8a8f96;flex-shrink:0;"></i>
+      <select class="tsel" style="min-width:104px;margin-left:1px;"><option>Noto Sans JP</option><option>PingFang TC</option><option>Helvetica Neue</option></select>
+      <select class="tsel" style="min-width:54px;margin-left:2px;"><option>Light</option><option>Regular</option><option>Medium</option><option>Bold</option></select>
+      <div class="psep"></div>
+      <div class="ib" title="全部大写"><i class="ti ti-letter-case-upper" aria-hidden="true"></i></div>
+      <div class="ib" title="小型大写"><i class="ti ti-letter-case" aria-hidden="true"></i></div>
+      <div class="ib" title="上标"><i class="ti ti-superscript" aria-hidden="true"></i></div>
+      <div class="ib" title="下标"><i class="ti ti-subscript" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <i class="ti ti-line-height" aria-hidden="true" title="行高" style="font-size:12px;color:#6b7079;flex-shrink:0;"></i>
+      <div class="tnum"><input class="tf w36" id="tlh" value="100%"><div class="spins"><div class="su" onclick="nudge('tlh',1)">▲</div><div class="sd" onclick="nudge('tlh',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">字距</span>
+      <select class="tsel" style="min-width:46px;"><option>视觉</option><option>原始</option><option>度量</option></select>
+      <i class="ti ti-letter-spacing" aria-hidden="true" title="字符间距" style="font-size:12px;color:#6b7079;flex-shrink:0;margin-left:2px;"></i>
+      <div class="tnum"><input class="tf w30" id="ttr" value="0%"><div class="spins"><div class="su" onclick="nudge('ttr',1)">▲</div><div class="sd" onclick="nudge('ttr',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <select class="tsel" style="min-width:42px;" title="字偶距"><option>自动</option></select>
+      <div class="psep"></div>
+      <span class="ptag">字</span>
+      <select class="tsel" style="min-width:62px;" title="字符样式"><option>Body+</option><option>Heading</option><option>Caption</option></select>
+      <div class="psep"></div>
+      <div class="ib"><i class="ti ti-align-left" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-center" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-right" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-justified" aria-hidden="true"></i></div>
+    </div>
+    <!-- ROW 2 · 段落 -->
+    <div class="pb-row">
+      <span class="ptag">段</span>
+      <i class="ti ti-text-size" aria-hidden="true" title="字号" style="font-size:12px;color:#6b7079;flex-shrink:0;"></i>
+      <div class="tnum"><input class="tf w44" id="tsize" value="4.5 点"><div class="spins"><div class="su" onclick="nudge('tsize',0.5)">▲</div><div class="sd" onclick="nudge('tsize',-0.5)">▼</div></div></div>
+      <div class="psep"></div>
+      <i class="ti ti-line-height" aria-hidden="true" title="行距" style="font-size:12px;color:#6b7079;flex-shrink:0;"></i>
+      <div class="tnum"><input class="tf w44" id="tlead" value="6.5 点"><div class="spins"><div class="su" onclick="nudge('tlead',0.5)">▲</div><div class="sd" onclick="nudge('tlead',-0.5)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">基线</span>
+      <div class="tnum"><input class="tf w36" id="tbase" value="0 点"><div class="spins"><div class="su" onclick="nudge('tbase',0.5)">▲</div><div class="sd" onclick="nudge('tbase',-0.5)">▼</div></div></div>
+      <div class="psep"></div>
+      <div class="ib" title="下划线"><i class="ti ti-underline" aria-hidden="true"></i></div>
+      <div class="ib" title="删除线"><i class="ti ti-strikethrough" aria-hidden="true"></i></div>
+      <div class="ib" title="上划线"><i class="ti ti-overline" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <span class="lbl">垂直</span>
+      <div class="tnum"><input class="tf w30" id="tvs" value="100%"><div class="spins"><div class="su" onclick="nudge('tvs',1)">▲</div><div class="sd" onclick="nudge('tvs',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <select class="tsel" style="min-width:42px;" title="标点挤压"><option>自动</option></select>
+      <div class="ib" title="无填色"><i class="ti ti-ban" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <label class="chk-row" style="cursor:pointer;"><input type="checkbox" id="tatech"><span style="font-size:9px;color:#6b7079;">直排内横排</span></label>
+      <div class="psep"></div>
+      <div class="ib"><i class="ti ti-align-left" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-center" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-right" aria-hidden="true"></i></div>
+      <div class="ib"><i class="ti ti-align-justified" aria-hidden="true"></i></div>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (二维码/条码) -->
+  <div class="propbar" id="propbar-qr" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">码</span>
+      <span class="lbl">内容</span>
+      <input class="tf" style="width:158px;text-align:left;" value="https://jcolour.app/p/2026">
+      <div class="psep"></div>
+      <span class="lbl">类型</span>
+      <select class="tsel"><option>二维码 QR</option><option>Data Matrix</option><option>条码 Code128</option></select>
+      <div class="psep"></div>
+      <span class="lbl">纠错</span>
+      <select class="tsel"><option>H 30%</option><option>Q 25%</option><option>M 15%</option><option>L 7%</option></select>
+      <div class="psep"></div>
+      <span class="lbl">尺寸</span>
+      <div class="tnum"><input class="tf w36" id="qrsz" value="25 毫米"><div class="spins"><div class="su" onclick="nudge('qrsz',1)">▲</div><div class="sd" onclick="nudge('qrsz',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">静区</span>
+      <div class="tnum"><input class="tf w30" id="qrqz" value="4"><div class="spins"><div class="su" onclick="nudge('qrqz',1)">▲</div><div class="sd" onclick="nudge('qrqz',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">前景</span><div class="qswatch" style="background:#000;"></div>
+      <span class="lbl">背景</span><div class="qswatch" style="background:#fff;border:1px solid #c4c9d0;"></div>
+      <div class="psep"></div>
+      <label class="chk-row"><input type="checkbox"><span style="font-size:9px;color:#6b7079;">嵌入Logo</span></label>
+      <label class="chk-row"><input type="checkbox" checked><span style="font-size:9px;color:#6b7079;">矢量输出</span></label>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (缩放 Scale) -->
+  <div class="propbar" id="propbar-scale" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">缩</span>
+      <div class="seg-mini"><span class="on">符合页面</span><span>符合宽度</span><span>符合高度</span><span>填满</span><span>自订</span></div>
+      <div class="psep"></div>
+      <span class="lbl">宽</span>
+      <div class="nf"><input class="ni w44" id="scw" value="406 毫米"><div class="spins"><div class="su" onclick="nudge('scw',1)">▲</div><div class="sd" onclick="nudge('scw',-1)">▼</div></div></div>
+      <span class="lbl">高</span>
+      <div class="nf"><input class="ni w44" id="sch" value="508 毫米"><div class="spins"><div class="su" onclick="nudge('sch',1)">▲</div><div class="sd" onclick="nudge('sch',-1)">▼</div></div></div>
+      <div class="chain on" onclick="this.classList.toggle('on')"><i class="ti ti-link" aria-hidden="true" style="font-size:8px;"></i></div>
+      <div class="psep"></div>
+      <span class="lbl">X</span><div class="nf"><input class="ni w30" id="scx" value="100%"><div class="spins"><div class="su" onclick="nudge('scx',5)">▲</div><div class="sd" onclick="nudge('scx',-5)">▼</div></div></div>
+      <span class="lbl">Y</span><div class="nf"><input class="ni w30" id="scy" value="100%"><div class="spins"><div class="su" onclick="nudge('scy',5)">▲</div><div class="sd" onclick="nudge('scy',-5)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">分辨率</span><div class="nf"><input class="ni w36" id="scdpi" value="350"><div class="spins"><div class="su" onclick="nudge('scdpi',10)">▲</div><div class="sd" onclick="nudge('scdpi',-10)">▼</div></div></div><span class="lbl">dpi</span>
+      <div class="psep"></div>
+      <span class="lbl">重采样</span><select class="tsel"><option>双三次</option><option>Lanczos</option><option>邻近</option></select>
+      <div class="psep"></div>
+      <span class="lbl" style="color:#969ba3;">原始 8400×10500px</span>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (裁切 Crop) -->
+  <div class="propbar" id="propbar-crop" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">裁</span>
+      <span class="lbl">左</span><div class="nf"><input class="ni w36" id="crl" value="0"><div class="spins"><div class="su" onclick="nudge('crl',1)">▲</div><div class="sd" onclick="nudge('crl',-1)">▼</div></div></div>
+      <span class="lbl">右</span><div class="nf"><input class="ni w36" id="crr" value="0"><div class="spins"><div class="su" onclick="nudge('crr',1)">▲</div><div class="sd" onclick="nudge('crr',-1)">▼</div></div></div>
+      <span class="lbl">上</span><div class="nf"><input class="ni w36" id="crt" value="0"><div class="spins"><div class="su" onclick="nudge('crt',1)">▲</div><div class="sd" onclick="nudge('crt',-1)">▼</div></div></div>
+      <span class="lbl">下</span><div class="nf"><input class="ni w36" id="crb" value="0"><div class="spins"><div class="su" onclick="nudge('crb',1)">▲</div><div class="sd" onclick="nudge('crb',-1)">▼</div></div></div>
+      <span class="lbl">毫米</span>
+      <div class="psep"></div>
+      <span class="lbl">锚点</span>
+      <div class="origin"><div class="od"></div><div class="od"></div><div class="od"></div><div class="od"></div><div class="od on"></div><div class="od"></div><div class="od"></div><div class="od"></div><div class="od"></div></div>
+      <div class="psep"></div>
+      <span class="lbl">比例</span><select class="tsel"><option>自由</option><option>原始比例</option><option>1:1</option><option>4:5</option><option>3:2</option></select>
+      <div class="psep"></div>
+      <div class="pbtn">重设</div>
+      <div class="pbtn pri"><i class="ti ti-check" aria-hidden="true"></i>套用裁切</div>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (旋转 / 镜像) -->
+  <div class="propbar" id="propbar-rotate" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">旋</span>
+      <span class="lbl">角度</span>
+      <div class="nf"><input class="ni w36" id="rtang" value="0°"><div class="spins"><div class="su" onclick="rotIn('rtang',1)">▲</div><div class="sd" onclick="rotIn('rtang',-1)">▼</div></div></div>
+      <div class="ib" onclick="rotIn('rtang',90)" title="顺时针90°"><i class="ti ti-rotate-clockwise" aria-hidden="true"></i></div>
+      <div class="ib" onclick="rotIn('rtang',-90)" title="逆时针90°"><i class="ti ti-rotate" aria-hidden="true"></i></div>
+      <div class="pbtn" onclick="rotIn('rtang',180)">180°</div>
+      <div class="psep"></div>
+      <div class="pbtn" title="旋转图像内容(part)"><i class="ti ti-rotate-rectangle" aria-hidden="true"></i>旋转部分</div>
+      <div class="psep"></div>
+      <div class="ib" onclick="this.classList.toggle('on')" title="水平镜像"><i class="ti ti-flip-horizontal" aria-hidden="true"></i></div>
+      <div class="ib" onclick="this.classList.toggle('on')" title="垂直镜像"><i class="ti ti-flip-vertical" aria-hidden="true"></i></div>
+      <div class="psep"></div>
+      <div class="pbtn"><i class="ti ti-copy" aria-hidden="true"></i>复制</div>
+      <span class="lbl" style="color:#969ba3;margin-left:4px;">旋转会增加运算时间</span>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (拼贴 Tiling) -->
+  <div class="propbar" id="propbar-tile" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">贴</span>
+      <span class="lbl">横向块</span><div class="nf"><input class="ni w26" id="tlx" value="2"><div class="spins"><div class="su" onclick="nudge('tlx',1)">▲</div><div class="sd" onclick="nudge('tlx',-1)">▼</div></div></div>
+      <span class="lbl">纵向块</span><div class="nf"><input class="ni w26" id="tly" value="3"><div class="spins"><div class="su" onclick="nudge('tly',1)">▲</div><div class="sd" onclick="nudge('tly',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">重叠</span><div class="nf"><input class="ni w36" id="tlov" value="5 毫米"><div class="spins"><div class="su" onclick="nudge('tlov',1)">▲</div><div class="sd" onclick="nudge('tlov',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <label class="chk-row"><input type="checkbox" checked><span style="font-size:9px;color:#6b7079;">裁切标记</span></label>
+      <label class="chk-row"><input type="checkbox"><span style="font-size:9px;color:#6b7079;">每块单页</span></label>
+      <div class="psep"></div>
+      <div class="pbtn">断开部分</div>
+      <div class="pbtn pri">重新拼贴</div>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (色彩替换 Color Replacement) -->
+  <div class="propbar" id="propbar-color" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">替</span>
+      <span class="lbl">源色</span><div class="crepl" style="background:#c8402f;"></div>
+      <div class="pbtn">显示颜色</div>
+      <i class="ti ti-arrow-right" aria-hidden="true" style="font-size:11px;color:#6b7079;margin:0 2px;"></i>
+      <span class="lbl">C</span><input class="tf w26" value="0"><span class="lbl">M</span><input class="tf w26" value="88"><span class="lbl">Y</span><input class="tf w26" value="92"><span class="lbl">K</span><input class="tf w26" value="2">
+      <div class="psep"></div>
+      <span class="lbl">色板</span><select class="tsel"><option>Pantone+ Solid</option><option>自订 Swatch</option><option>命名色</option></select>
+      <div class="psep"></div>
+      <div class="pbtn"><i class="ti ti-color-picker" aria-hidden="true"></i>量测</div>
+      <div class="pbtn">命名色…</div>
+      <div class="psep"></div>
+      <label class="chk-row"><input type="checkbox"><span style="font-size:9px;color:#6b7079;">纯色(不经色管)</span></label>
+      <span class="lbl" style="color:#969ba3;">ΔE 1.4</span>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (调色 Tune) -->
+  <div class="propbar" id="propbar-tune" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">调</span>
+      <span class="lbl">亮度</span><div class="nf"><input class="ni w30" id="tuB" value="0"><div class="spins"><div class="su" onclick="nudge('tuB',1)">▲</div><div class="sd" onclick="nudge('tuB',-1)">▼</div></div></div>
+      <span class="lbl">对比</span><div class="nf"><input class="ni w30" id="tuC" value="0"><div class="spins"><div class="su" onclick="nudge('tuC',1)">▲</div><div class="sd" onclick="nudge('tuC',-1)">▼</div></div></div>
+      <span class="lbl">饱和</span><div class="nf"><input class="ni w30" id="tuS" value="0"><div class="spins"><div class="su" onclick="nudge('tuS',1)">▲</div><div class="sd" onclick="nudge('tuS',-1)">▼</div></div></div>
+      <span class="lbl">色相</span><div class="nf"><input class="ni w30" id="tuH" value="0"><div class="spins"><div class="su" onclick="nudge('tuH',1)">▲</div><div class="sd" onclick="nudge('tuH',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <span class="lbl">色彩平衡</span><select class="tsel"><option>整体</option><option>高光</option><option>中间调</option><option>阴影</option></select>
+      <div class="pbtn"><i class="ti ti-chart-line" aria-hidden="true"></i>渐变曲线</div>
+      <div class="psep"></div>
+      <span class="lbl">预览</span><div class="seg-mini"><span class="on">预览</span><span>原图</span><span>打印预览</span></div>
+      <label class="chk-row"><input type="checkbox" checked><span style="font-size:9px;color:#6b7079;">色域外标记</span></label>
+      <div class="pbtn">重设</div>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (量测颜色 Measure) -->
+  <div class="propbar" id="propbar-measure" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">量</span>
+      <span class="lbl">仪器</span><select class="tsel" style="min-width:78px;"><option>X-Rite i1Pro3</option><option>i1Pro2</option><option>i1iSis</option></select>
+      <div class="psep"></div>
+      <span class="lbl">模式</span><select class="tsel"><option>单点</option><option>扫描条</option></select>
+      <div class="psep"></div>
+      <span class="lbl">L</span><input class="tf w30" value="53.2"><span class="lbl">a</span><input class="tf w30" value="68.1"><span class="lbl">b</span><input class="tf w30" value="48.5">
+      <div class="psep"></div>
+      <span class="lbl">色样</span><div class="crepl" style="background:#c8402f;"></div>
+      <div class="psep"></div>
+      <input class="tf" style="width:80px;text-align:left;" placeholder="颜色名称…" value="Logo Red">
+      <div class="pbtn pri"><i class="ti ti-plus" aria-hidden="true"></i>加入色彩工具</div>
+    </div>
+  </div>
+
+  <!-- PROPERTY BAR (自动拼版 Nest) -->
+  <div class="propbar" id="propbar-nest" style="display:none;">
+    <div class="pb-row">
+      <span class="ptag">版</span>
+      <span class="lbl">间距</span><div class="nf"><input class="ni w36" id="nsgap" value="3 毫米"><div class="spins"><div class="su" onclick="nudge('nsgap',1)">▲</div><div class="sd" onclick="nudge('nsgap',-1)">▼</div></div></div>
+      <span class="lbl">出血</span><div class="nf"><input class="ni w30" id="nsbl" value="0"><div class="spins"><div class="su" onclick="nudge('nsbl',1)">▲</div><div class="sd" onclick="nudge('nsbl',-1)">▼</div></div></div>
+      <div class="psep"></div>
+      <label class="chk-row"><input type="checkbox" checked><span style="font-size:9px;color:#6b7079;">允许旋转</span></label>
+      <label class="chk-row"><input type="checkbox" checked><span style="font-size:9px;color:#6b7079;">优化利用率</span></label>
+      <label class="chk-row"><input type="checkbox"><span style="font-size:9px;color:#6b7079;">节省介质</span></label>
+      <div class="psep"></div>
+      <span class="lbl">排序</span><select class="tsel"><option>面积大→小</option><option>导入顺序</option><option>名称</option></select>
+      <div class="psep"></div>
+      <span class="lbl" style="color:#2f8c4f;font-weight:600;">利用率 81%</span>
+      <div class="pbtn pri"><i class="ti ti-layout-grid" aria-hidden="true"></i>重新拼版</div>
+    </div>
+  </div>
+
+  <!-- workspace -->
+  <div class="workspace">
+    <div class="toolbox">
+      <div class="tic on" id="toolSel" title="选择 / 移动" onclick="selTool(this,'obj');selBlk(0)"><i class="ti ti-pointer" aria-hidden="true"></i></div>
+      <div class="tdiv"></div>
+      <div class="tic" id="toolText" title="文字" onclick="selTool(this,'txt');selText()"><i class="ti ti-typography" aria-hidden="true"></i></div>
+      <div class="tic" title="二维码 / 条码" onclick="selTool(this,'qr')"><i class="ti ti-qrcode" aria-hidden="true"></i></div>
+      <div class="tdiv"></div>
+      <div class="tic" title="缩放" onclick="selTool(this,'scale')"><i class="ti ti-resize" aria-hidden="true"></i></div>
+      <div class="tic" title="裁切" onclick="selTool(this,'crop')"><i class="ti ti-crop" aria-hidden="true"></i></div>
+      <div class="tic" title="旋转 / 镜像" onclick="selTool(this,'rotate')"><i class="ti ti-rotate-2" aria-hidden="true"></i></div>
+      <div class="tic" title="拼贴 Tiling" onclick="selTool(this,'tile')"><i class="ti ti-border-all" aria-hidden="true"></i></div>
+      <div class="tdiv"></div>
+      <div class="tic" title="自动拼版 / 嵌套" onclick="selTool(this,'nest')"><i class="ti ti-layout-board-split" aria-hidden="true"></i></div>
+      <div class="tdiv"></div>
+      <div class="tic" title="放大" onclick="selTool(this)"><i class="ti ti-zoom-in" aria-hidden="true"></i></div>
+      <div class="tic" title="缩小" onclick="selTool(this)"><i class="ti ti-zoom-out" aria-hidden="true"></i></div>
+      <div class="tic" title="网格 / 参考线" onclick="selTool(this)"><i class="ti ti-grid-dots" aria-hidden="true"></i></div>
+      <div class="tic" title="标尺" onclick="selTool(this)"><i class="ti ti-ruler" aria-hidden="true"></i></div>
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="r-corner"></div>
+      <div class="ruler-h"></div>
+      <div class="ruler-v"></div>
+
+      <div class="canvas-scroll">
+      <div class="paper" id="paper">
+        <div class="paper-lbl">609.6 × 914.4 mm · Photo Rag 308gsm</div>
+
+        <!-- blk 0 selected -->
+        <div class="blk sel" id="blk0" style="left:2.6%;top:1.86%;width:46.96%;height:41.6%;" onclick="selBlk(0)">
+          <div class="blk-bg" style="background:#3a5468;"><i class="ti ti-photo" aria-hidden="true" style="font-size:22px;color:rgba(255,255,255,.4);"></i></div>
+          <div class="hnd tl"></div><div class="hnd tr"></div><div class="hnd bl"></div><div class="hnd br"></div>
+          <div class="hnd tm"></div><div class="hnd bm"></div><div class="hnd ml"></div><div class="hnd mr"></div>
+          <div class="blk-lbl">portrait_01 · 286×380mm</div>
+        </div>
+        <div class="blk" id="blk1" style="left:52.17%;top:1.86%;width:45.22%;height:21.12%;border:0.5px solid rgba(0,0,0,.1);" onclick="selBlk(1)">
+          <div class="blk-bg" style="background:#3a5040;"><i class="ti ti-photo" aria-hidden="true" style="font-size:15px;color:rgba(255,255,255,.4);"></i></div>
+          <div class="blk-lbl">landscape_02</div>
+        </div>
+        <div class="blk" id="blk2" style="left:52.17%;top:24.84%;width:25.22%;height:17.39%;border:0.5px solid rgba(0,0,0,.1);" onclick="selBlk(2)">
+          <div class="blk-bg" style="background:#4a3830;"><i class="ti ti-photo" aria-hidden="true" style="font-size:13px;color:rgba(255,255,255,.4);"></i></div>
+        </div>
+        <div class="blk" id="blk3" style="left:2.6%;top:47.2%;width:37.39%;height:34.16%;border:0.5px solid rgba(0,0,0,.1);" onclick="selBlk(3)">
+          <div class="blk-bg" style="background:#3c3050;"><i class="ti ti-photo" aria-hidden="true" style="font-size:16px;color:rgba(255,255,255,.4);"></i></div>
+          <div class="blk-lbl">abstract_04</div>
+        </div>
+        <div class="blk" id="blk4" style="left:42.61%;top:47.2%;width:54.78%;height:24.22%;border:0.5px solid rgba(0,0,0,.1);" onclick="selBlk(4)">
+          <div class="blk-bg" style="background:#2a4840;"><i class="ti ti-photo" aria-hidden="true" style="font-size:15px;color:rgba(255,255,255,.4);"></i></div>
+          <div class="blk-lbl">seascape_05</div>
+        </div>
+        <!-- 文字物件 -->
+        <div class="blk txt" id="blkT" style="left:2.6%;top:83.23%;width:94.78%;height:8.07%;" onclick="event.stopPropagation();selText()">
+          <div class="blk-bg" style="background:transparent;justify-content:flex-start;padding-left:5px;"><span style="font-size:13px;font-weight:600;color:#2b2e33;">展览标题 2026 · Exhibition</span></div>
+          <div class="hnd tl"></div><div class="hnd tr"></div><div class="hnd bl"></div><div class="hnd br"></div>
+          <div class="hnd tm"></div><div class="hnd bm"></div><div class="hnd ml"></div><div class="hnd mr"></div>
+          <div class="blk-lbl">文字 · Noto Sans JP Light</div>
+        </div>
+        <div class="util-tag">利用率 81%</div>
+      </div>
+      </div>
+
+      <div class="zoom-bar">
+        <span class="zm-btn" onclick="zoom(-10)">−</span>
+        <span class="zm-val" id="zv">100%</span>
+        <span class="zm-btn" onclick="zoom(10)">+</span>
+        <span style="width:1px;height:12px;background:#d2d5d9;"></span>
+        <span class="zm-btn" onclick="zoomFit()" title="整张纸适合窗口" style="font-size:10px;">适合</span>
+      </div>
+    </div>
+
+    <!-- right panel -->
+    <div class="rpanel">
+      <div class="rp-tabs">
+        <div class="rp-tab on" onclick="switchTab(this,'t-img')">图片</div>
+        <div class="rp-tab" onclick="switchTab(this,'t-qs')">环境</div>
+        <div class="rp-tab" onclick="switchTab(this,'t-pf')">预检</div>
+        <div class="rp-tab" onclick="switchTab(this,'t-q')">队列</div>
+      </div>
+
+      <div id="t-img">
+        <div class="rp-hd" id="img-hd">portrait_01.tif</div>
+        <div class="rp-row"><span class="rp-k">原始尺寸</span><span class="rp-v" id="img-size">8400×10500px</span></div>
+        <div class="rp-row"><span class="rp-k">嵌入 ICC</span><span class="rp-v warn" id="img-icc">AdobeRGB</span></div>
+        <div class="rp-row"><span class="rp-k">色彩深度</span><span class="rp-v" id="img-depth">16-bit</span></div>
+        <div class="rp-row"><span class="rp-k">分辨率</span><span class="rp-v" id="img-dpi">350 dpi</span></div>
+        <div style="height:1px;background:#e6e8eb;margin:2px 0;"></div>
+        <div class="rp-hd">打印设置（本图）</div>
+        <div class="rp-body">
+          <div style="font-size:9px;color:#868c95;margin-bottom:3px;">打印模式（5 选 1 · 用已校准的线性/色彩管理）</div>
+          <div class="mode-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="mode-btn" onclick="pmodeClick(this,'单黑','mono')">单黑</div>
+            <div class="mode-btn" onclick="pmodeClick(this,'黑+灰','gray')">黑+灰</div>
+            <div class="mode-btn on" onclick="pmodeClick(this,'黑+灰+彩','tone')">黑+灰+彩</div>
+            <div class="mode-btn" onclick="pmodeClick(this,'RGB','rgb')">RGB<span class="stale-dot" title="线性曲线 35 天 · 超 1 个月需检查"></span></div>
+            <div class="mode-btn" onclick="pmodeClick(this,'16 位 RGB','rgb16')" style="grid-column:span 2;">16 位 RGB</div>
+          </div>
+          <div class="cm-hint" id="pmodeHint"></div>
+          <div id="modeAdjust"></div>
+        </div>
+        <div style="height:1px;background:#e6e8eb;margin:2px 0;"></div>
+        <div class="rp-hd">打印机状态</div>
+        <div class="rp-row"><span class="rp-k">打印机</span><span class="rp-v ok">P9500 ✓</span></div>
+        <div class="rp-row"><span class="rp-k">纸张</span><span class="rp-v">Photo Rag 308g</span></div>
+        <div class="rp-row"><span class="rp-k">校准</span><span class="rp-v warn" style="cursor:pointer;" onclick="openEnvMgr()">RGB 35 天 ⚠ · 其余 9 天</span></div>
+        <div class="rp-row"><span class="rp-k">LLK 余量</span><span class="rp-v warn">31%</span></div>
+      </div>
+
+      <div id="t-qs" style="display:none;">
+        <div class="rp-hd">打印环境 · 机 + 纸 · 点击卡片打开管理器</div>
+        <div class="qs-item on" onclick="openEnvMgr()">
+          <div class="qs-dots"><div class="qs-dot" style="background:#444;"></div><div class="qs-dot" style="background:#888;"></div><div class="qs-dot" style="background:#bbb;"></div></div>
+          <div class="qs-mid">
+            <span class="qs-name">P9500 · Photo Rag 308</span>
+            <span class="qs-sub">总墨 260% · 4 模式 9 天 ✓</span>
+          </div>
+          <span class="qs-badge warn">RGB 需检查</span>
+        </div>
+        <div class="qs-item" onclick="openEnvMgr()">
+          <div class="qs-dots"><div class="qs-dot" style="background:#e05c4b;"></div><div class="qs-dot" style="background:#4a7fd4;"></div><div class="qs-dot" style="background:#4cb87a;"></div></div>
+          <div class="qs-mid">
+            <span class="qs-name">P9500 · Canson Baryta 310</span>
+            <span class="qs-sub">总墨 280% · 全部模式</span>
+          </div>
+          <span class="qs-badge warn">过期 18天</span>
+        </div>
+        <div class="qs-item" onclick="openEnvMgr()">
+          <div class="qs-dots"><div class="qs-dot" style="background:#444;"></div><div class="qs-dot" style="background:#e05c4b;"></div></div>
+          <div class="qs-mid">
+            <span class="qs-name">P9500 · Legacy Fibre</span>
+            <span class="qs-sub">墨批 #A6 旧批</span>
+          </div>
+          <span class="qs-badge bad">墨批已变</span>
+        </div>
+        <div style="padding:8px 10px;display:flex;gap:6px;">
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:5px;border:1px dashed #b9c2cc;border-radius:4px;font-size:9px;color:#6b7079;cursor:pointer;gap:3px;">
+            <i class="ti ti-plus" aria-hidden="true" style="font-size:11px;"></i>新建环境
+          </div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:5px;border:1px solid #bcd4f2;background:#eaf2fc;border-radius:4px;font-size:9px;color:#1f5fa8;cursor:pointer;gap:3px;" title="自动量测比对线性，超标才重建">
+            <i class="ti ti-target" aria-hidden="true" style="font-size:11px;"></i>自动校验
+          </div>
+        </div>
+      </div>
+
+      <div id="t-pf" style="display:none;">
+        <div class="rp-hd">预检 — portrait_01</div>
+        <div style="margin:6px 10px;padding:5px 8px;background:#fbf2dd;border:1px solid #e6c878;border-radius:4px;font-size:9px;color:#8a6310;display:flex;align-items:center;gap:5px;">
+          <i class="ti ti-alert-triangle" aria-hidden="true" style="font-size:11px;"></i><span id="pf-banner-t">1 项警告，建议处理后打印</span>
+        </div>
+        <div class="pf-row"><i class="ti ti-circle-check pf-ok" aria-hidden="true"></i><span class="pf-t">分辨率 350dpi ✓</span></div>
+        <div class="pf-row"><i class="ti ti-alert-triangle pf-wn" aria-hidden="true"></i><span class="pf-t">ICC: AdobeRGB ≠ 预设</span><span class="pf-fx">转换</span></div>
+        <div class="pf-row"><i class="ti ti-circle-check pf-ok" aria-hidden="true"></i><span class="pf-t">16-bit ✓</span></div>
+        <div class="pf-row"><i class="ti ti-circle-check pf-ok" aria-hidden="true"></i><span class="pf-t">色域超出 3.2%</span></div>
+        <div class="pf-row"><i class="ti ti-circle-check pf-ok" aria-hidden="true"></i><span class="pf-t">总墨量 245% ≤ 260% ✓</span></div>
+        <div class="pf-row"><i class="ti ti-circle-check pf-ok" id="pf-cal-ic" aria-hidden="true"></i><span class="pf-t" id="pf-cal-t">校准有效 · 9 天</span><span class="pf-fx" id="pf-cal-fix" style="display:none;" onclick="openEnvMgr()">检查</span></div>
+        <div class="pf-row"><i class="ti ti-circle-check pf-ok" aria-hidden="true"></i><span class="pf-t">打印机已连线</span></div>
+        <div style="padding:8px 10px;display:flex;gap:5px;">
+          <div style="flex:1;height:22px;background:#fff;border:1px solid #c4c9d0;border-radius:4px;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#4a4e55;">忽略并打印</div>
+          <div style="flex:1;height:22px;background:#2e7dd7;border-radius:4px;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;gap:2px;"><i class="ti ti-wand" aria-hidden="true" style="font-size:11px;"></i>自动修正</div>
+        </div>
+      </div>
+
+      <!-- RIP 佇列 (ErgoSoft PrintClient) -->
+      <div id="t-q" style="display:none;">
+        <div class="rp-hd" style="display:flex;align-items:center;">RIP 队列 <span style="margin-left:auto;display:flex;gap:5px;"><i class="ti ti-player-pause" aria-hidden="true" style="cursor:pointer;"></i><i class="ti ti-trash" aria-hidden="true" style="cursor:pointer;"></i></span></div>
+        <div style="padding:6px 10px;display:flex;align-items:center;gap:6px;border-bottom:0.5px solid #e6e8eb;">
+          <span class="tl">
+            <span class="tl-d r" title="离线" onclick="setTL(this)"></span>
+            <span class="tl-d y on" title="手动开始" onclick="setTL(this)"></span>
+            <span class="tl-d g" title="连线（自动）" onclick="setTL(this)"></span>
+          </span>
+          <span class="tl-lbl" id="tlLbl">手动开始</span>
+          <span style="margin-left:auto;font-size:9px;color:#868c95;">P9500 · RIP 10MB</span>
+        </div>
+
+        <div class="q-lane">
+          <div class="q-lane-hd"><span class="dot" style="background:#2e7dd7;"></span>正在 RIP / 打印<span class="q-cnt">1</span></div>
+          <div class="q-job"><span class="qn">portrait_01</span><span class="q-bar"><i style="width:38%;"></i></span><span class="q-pct">38%</span></div>
+        </div>
+        <div class="q-lane">
+          <div class="q-lane-hd"><span class="dot" style="background:#febc2e;"></span>等待打印<span class="q-cnt">3</span></div>
+          <div class="q-job"><span class="qn">landscape_02</span><span class="q-bar"><i style="width:100%;"></i></span><span class="q-pct">就绪</span></div>
+          <div class="q-job"><span class="qn">detail_03</span><span class="q-bar"><i style="width:100%;"></i></span><span class="q-pct">就绪</span></div>
+          <div class="q-job"><span class="qn">abstract_04</span><span class="q-bar"><i style="width:100%;"></i></span><span class="q-pct">就绪</span></div>
+        </div>
+        <div class="q-lane">
+          <div class="q-lane-hd"><span class="dot" style="background:#2f8c4f;"></span>已完成<span class="q-cnt">1</span></div>
+          <div class="q-job" style="color:#969ba3;"><span class="qn">test_chart</span><span style="flex:1;"></span><i class="ti ti-circle-check" aria-hidden="true" style="color:#2f8c4f;"></i></div>
+        </div>
+        <div class="q-lane" style="border-bottom:none;">
+          <div class="q-lane-hd"><span class="dot" style="background:#ff5f57;"></span>错误<span class="q-cnt">0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- job strip -->
+  <div class="jobstrip">
+    <div class="jt on" onclick="selBlk(0)"><div class="jt-img" style="background:#3a5468;"><i class="ti ti-photo" aria-hidden="true" style="font-size:12px;color:rgba(255,255,255,.5);"></i></div><div class="jt-lbl">portrait_01</div></div>
+    <div class="jt" onclick="selBlk(1)"><div class="jt-img" style="background:#3a5040;"><i class="ti ti-photo" aria-hidden="true" style="font-size:12px;color:rgba(255,255,255,.5);"></i></div><div class="jt-lbl">landscape_02</div></div>
+    <div class="jt" onclick="selBlk(2)"><div class="jt-img" style="background:#4a3830;"><i class="ti ti-photo" aria-hidden="true" style="font-size:12px;color:rgba(255,255,255,.5);"></i></div><div class="jt-lbl">detail_03</div></div>
+    <div class="jt" onclick="selBlk(3)"><div class="jt-img" style="background:#3c3050;"><i class="ti ti-photo" aria-hidden="true" style="font-size:12px;color:rgba(255,255,255,.5);"></i></div><div class="jt-lbl">abstract_04</div></div>
+    <div class="jt" onclick="selBlk(4)"><div class="jt-img" style="background:#2a4840;"><i class="ti ti-photo" aria-hidden="true" style="font-size:12px;color:rgba(255,255,255,.5);"></i></div><div class="jt-lbl">seascape_05</div></div>
+    <div class="jt-add"><i class="ti ti-plus" aria-hidden="true"></i><span>导入</span></div>
+    <div class="js-right">
+      <span style="font-size:9px;color:#6b7079;">5 张 · Photo Rag</span>
+      <div style="width:1px;height:14px;background:#d2d5d9;"></div>
+      <span style="font-size:9px;color:#6b7079;">利用率</span>
+      <span style="font-size:13px;font-weight:600;color:#2f8c4f;">81%</span>
+      <div style="width:1px;height:14px;background:#d2d5d9;"></div>
+      <span class="tl" title="出墨控制：离线 / 手动 / 连线">
+        <span class="tl-d r" title="离线" onclick="setTL(this)"></span>
+        <span class="tl-d y on" title="手动开始" onclick="setTL(this)"></span>
+        <span class="tl-d g" title="连线（自动）" onclick="setTL(this)"></span>
+      </span>
+      <span style="font-size:9px;color:#6b7079;">队列 4</span>
+      <div class="print-btn" title="打印整版（5 张 · 当前纸张）"><i class="ti ti-printer" aria-hidden="true"></i>打印整版</div>
+    </div>
+  </div>
+
+  <!-- statusbar -->
+  <div class="statusbar">
+    <div class="sc"><div class="dot ok"></div>P9500 · 已连线</div>
+    <div class="ssep"></div>
+    <div class="sc"><div class="dot ok"></div>软打样 · 启用</div>
+    <div class="ssep"></div>
+    <div class="sc" style="cursor:pointer;" onclick="openEnvMgr()" title="点击打开打印环境管理器"><div class="dot warn"></div>校准 9 天 · RGB 35 天需检查</div>
+    <div class="ssep"></div>
+    <div class="sc"><div class="dot warn"></div>LLK 31%</div>
+    <div class="ssep"></div>
+    <div class="sc"><div class="dot gr"></div><span id="sb-info">portrait_01 · X 16  Y 17  宽 286  高 380 毫米</span></div>
+    <div class="sr">24″ × 36″ · 5 张</div>
+  </div>
+
+</div>
+
+<!-- ══ 打印环境管理器 ══ -->
+<div class="modal-ov" id="envmgr-ov" onclick="if(event.target===this)closeEnvMgr()">
+  <div class="envmgr">
+    <div class="em-hd">打印环境管理器<span style="font-weight:400;color:#6b7079;font-size:11px;margin-left:8px;">机 + 介质 + 线性化 + ICC + 总墨量 全部内嵌在一个环境里</span><span class="x" onclick="closeEnvMgr()"><i class="ti ti-x"></i></span></div>
+    <div class="em-body">
+      <div class="em-left">
+        <div class="em-tools">
+          <div class="pbtn pri" onclick="emWizard()"><i class="ti ti-plus"></i>新建 / 校准向导</div>
+          <div class="pbtn"><i class="ti ti-download"></i>下载</div>
+          <div class="pbtn"><i class="ti ti-file-import"></i>导入</div>
+          <div class="pbtn"><i class="ti ti-copy"></i>复制</div>
+        </div>
+        <div class="em-list">
+          <div class="qs-item on" onclick="emDetail()">
+            <div class="qs-dots"><div class="qs-dot" style="background:#444;"></div><div class="qs-dot" style="background:#888;"></div><div class="qs-dot" style="background:#bbb;"></div></div>
+            <div class="qs-mid"><span class="qs-name">Photo Rag 308 · 四色黑 WF3</span><span class="qs-sub">P9500 · 2880×1440 · 总墨 260%</span></div>
+            <span class="qs-badge ok">已校准</span>
+          </div>
+          <div class="qs-item" onclick="emDetail()">
+            <div class="qs-dots"><div class="qs-dot" style="background:#e05c4b;"></div><div class="qs-dot" style="background:#4a7fd4;"></div><div class="qs-dot" style="background:#4cb87a;"></div></div>
+            <div class="qs-mid"><span class="qs-name">Canson Baryta · ProPhoto</span><span class="qs-sub">P9500 · 2880×1440 · 总墨 280%</span></div>
+            <span class="qs-badge warn">过期</span>
+          </div>
+          <div class="qs-item" onclick="emDetail()">
+            <div class="qs-dots"><div class="qs-dot" style="background:#444;"></div><div class="qs-dot" style="background:#e05c4b;"></div></div>
+            <div class="qs-mid"><span class="qs-name">Legacy Fibre · 黑+彩</span><span class="qs-sub">P9500 · 1440×1440 · 墨批 #A6</span></div>
+            <span class="qs-badge bad">墨批已变</span>
+          </div>
+        </div>
+      </div>
+      <div class="em-right" id="em-right"><!-- emDetail() / emWizard() 注入 --></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const bdata=[
+  {x:'16',y:'17',w:'286',h:'380',rot:'0',sk:'0',mode:'mono4',name:'portrait_01',size:'8400×10500px',icc:'AdobeRGB',iccW:1,depth:'16-bit',dpi:'350 dpi'},
+  {x:'318',y:'17',w:'276',h:'193',rot:'0',sk:'0',mode:'pp',name:'landscape_02',size:'7200×5040px',icc:'ProPhoto RGB',iccW:0,depth:'16-bit',dpi:'300 dpi'},
+  {x:'318',y:'227',w:'154',h:'159',rot:'0',sk:'0',mode:'mono1',name:'detail_03',size:'3600×3720px',icc:'Gray Gamma 2.2',iccW:0,depth:'16-bit',dpi:'360 dpi'},
+  {x:'16',y:'432',w:'228',h:'312',rot:'0',sk:'0',mode:'bwc',name:'abstract_04',size:'5400×7392px',icc:'ProPhoto RGB',iccW:0,depth:'16-bit',dpi:'300 dpi'},
+  {x:'260',y:'432',w:'334',h:'221',rot:'0',sk:'0',mode:'pp',name:'seascape_05',size:'7900×5228px',icc:'sRGB',iccW:1,depth:'8-bit',dpi:'240 dpi'},
+];
+
+const PROPBARS=['obj','txt','qr','scale','crop','rotate','tile','color','tune','measure','nest'];
+function setPropMode(m){
+  PROPBARS.forEach(b=>{const el=document.getElementById('propbar-'+b);if(el)el.style.display=(b===m)?'':'none';});
+}
+function selTool(el,mode){
+  document.querySelectorAll('.toolbox .tic').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  if(mode) setPropMode(mode);
+}
+function rotIn(id,deg){
+  const el=document.getElementById(id);if(!el)return;
+  const m=el.value.match(/(-?[\d.]+)/);if(!m)return;
+  el.value=(((parseFloat(m[1])+deg)%360+360)%360)+'°';
+}
+function selText(){
+  document.querySelectorAll('.blk').forEach(b=>{b.classList.remove('sel');b.querySelectorAll('.hnd').forEach(h=>h.style.display='none');});
+  const t=document.getElementById('blkT');
+  t.classList.add('sel');t.querySelectorAll('.hnd').forEach(h=>h.style.display='block');
+  document.querySelectorAll('.jt').forEach(j=>j.classList.remove('on'));
+  setPropMode('txt');
+  document.getElementById('sb-info').textContent='文字物件 · “展览标题 2026” · Noto Sans JP Light · 4.5 点';
+}
+function selBlk(i){
+  setPropMode('obj');
+  const tb=document.getElementById('blkT');if(tb){tb.classList.remove('sel');tb.querySelectorAll('.hnd').forEach(h=>h.style.display='none');}
+  document.querySelectorAll('.blk:not(.txt)').forEach((b,j)=>{
+    b.classList.toggle('sel',j===i);
+    b.querySelectorAll('.hnd').forEach(h=>h.style.display=j===i?'block':'none');
+  });
+  document.querySelectorAll('.jt').forEach((j,k)=>j.classList.toggle('on',k===i));
+  const d=bdata[i];
+  document.getElementById('px').value=d.x+' 毫米';
+  document.getElementById('py').value=d.y+' 毫米';
+  document.getElementById('pw').value=d.w+' 毫米';
+  document.getElementById('ph').value=d.h+' 毫米';
+  document.getElementById('prot').value=d.rot+'°';
+  document.getElementById('psk').value=d.sk+'°';
+  document.getElementById('cmode').value=d.mode;
+  updateMode();
+  document.getElementById('sb-info').textContent=d.name+' · X '+d.x+'  Y '+d.y+'  宽 '+d.w+'  高 '+d.h+' 毫米';
+  // 右面板图片信息跟随选取
+  const hd=document.getElementById('img-hd'); if(hd)hd.textContent=d.name+'.tif';
+  const sz=document.getElementById('img-size'); if(sz)sz.textContent=d.size;
+  const ic=document.getElementById('img-icc'); if(ic){ic.textContent=d.icc; ic.className='rp-v'+(d.iccW?' warn':'');}
+  const dp=document.getElementById('img-depth'); if(dp)dp.textContent=d.depth;
+  const di=document.getElementById('img-dpi'); if(di)di.textContent=d.dpi;
+}
+
+function nudge(id,d){
+  const el=document.getElementById(id);if(!el)return;
+  const m=el.value.match(/(-?[\d.]+)/);if(!m)return;
+  const n=Math.round((parseFloat(m[1])+d)*100)/100;
+  el.value=el.value.replace(/(-?[\d.]+)/,n);
+}
+function rot(deg){
+  const el=document.getElementById('prot');
+  const m=el.value.match(/(-?[\d.]+)/);if(!m)return;
+  const n=((parseFloat(m[1])+deg)%360+360)%360;
+  el.value=n+'°';
+}
+const modeCfg={
+  mono4:['#444','#888','#bbb'],
+  mono1:['#111','transparent','transparent'],
+  bwc:['#444','#e05c4b','transparent'],
+  rgb:['#e05c4b','#4a7fd4','#4cb87a'],
+  pp:['#c4006a','#4a7fd4','#f0a500'],
+};
+function updateMode(){
+  const v=document.getElementById('cmode').value;
+  modeCfg[v].forEach((c,i)=>{const el=document.getElementById('md'+i);if(el)el.style.background=c;});
+}
+document.getElementById('og').addEventListener('click',function(e){
+  const d=e.target.closest('.od');if(!d)return;
+  this.querySelectorAll('.od').forEach(o=>o.classList.remove('on'));
+  d.classList.add('on');
+});
+/* ── 真缩放 + 动态尺规（刻度对齐纸张毫米，跟随缩放/滚动） ── */
+const PAPER_MM_W=609.6, PAPER_MM_H=914.4;
+let zl=100; // 100% = 纸张占窗口 80% 宽
+function applyZoom(){
+  const p=document.getElementById('paper');
+  if(p)p.style.width=(80*zl/100)+'%';
+  const z=document.getElementById('zv'); if(z)z.textContent=zl+'%';
+  renderRulers();
+}
+function zoom(d){zl=Math.max(10,Math.min(300,zl+d));applyZoom();}
+function zoomFit(){
+  const sc=document.querySelector('.canvas-scroll'); if(!sc)return;
+  const availW=sc.clientWidth-32, availH=sc.clientHeight-32;
+  const targetW=Math.min(availW, availH*PAPER_MM_W/PAPER_MM_H);
+  zl=Math.max(10,Math.round(targetW/(availW*0.8)*100));
+  applyZoom();
+  sc.scrollTop=0;
+}
+function renderRulers(){
+  const wrap=document.querySelector('.canvas-wrap');
+  const p=document.getElementById('paper');
+  const rh=document.querySelector('.ruler-h'), rv=document.querySelector('.ruler-v');
+  if(!wrap||!p||!rh||!rv)return;
+  const wr=wrap.getBoundingClientRect(), pr=p.getBoundingClientRect();
+  const scale=pr.width/PAPER_MM_W;
+  const step= scale*100<26 ? 200 : 100;
+  let h='',v='';
+  for(let mm=0;mm<=PAPER_MM_W;mm+=step){
+    const x=pr.left-wr.left-18+mm*scale;
+    if(x>-26&&x<wr.width) h+='<span class="rtick" style="left:'+x.toFixed(1)+'px;">'+mm+'</span>';
+  }
+  for(let mm=0;mm<=PAPER_MM_H;mm+=step){
+    const y=pr.top-wr.top-18+mm*scale;
+    if(y>-26&&y<wr.height) v+='<span class="rtick" style="top:'+y.toFixed(1)+'px;">'+mm+'</span>';
+  }
+  rh.innerHTML=h; rv.innerHTML=v;
+}
+function goPreflight(){
+  const tabs=document.querySelectorAll('.rp-tab');
+  if(tabs[2])switchTab(tabs[2],'t-pf');
+}
+window.addEventListener('resize',renderRulers);
+function switchTab(el,id){
+  document.querySelectorAll('.rp-tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  ['t-img','t-qs','t-pf','t-q'].forEach(t=>{document.getElementById(t).style.display=t===id?'':'none';});
+}
+function setTL(el){
+  const grp=el.parentElement;
+  grp.querySelectorAll('.tl-d').forEach(d=>d.classList.remove('on'));
+  el.classList.add('on');
+  const lbl=el.classList.contains('g')?'连线（自动）':el.classList.contains('y')?'手动开始':'离线';
+  document.querySelectorAll('.tl').forEach(t=>{
+    const cls=el.classList.contains('g')?'g':el.classList.contains('y')?'y':'r';
+    t.querySelectorAll('.tl-d').forEach(d=>d.classList.toggle('on',d.classList.contains(cls)));
+  });
+  const l=document.getElementById('tlLbl');if(l)l.textContent=lbl;
+}
+function updateIntentHint(){
+  const v=document.getElementById('intent').value;
+  const h=document.getElementById('intentHint');
+  const map={
+    per:'ⓘ 照片建议 <b>可感知</b>：压缩色域、保留层次与渐变，适合大面积天空与肤色。',
+    rel:'ⓘ <b>相对色度 + 黑点补偿</b>：严格还原可呈现颜色，建议保持 BPC 开启以保留暗部层次。',
+    sat:'ⓘ <b>饱和度</b>：图表 / 商业图形用，照片不建议。',
+    abs:'ⓘ <b>绝对色度</b>：打样模拟纸白时用，会渲染介质底色。'
+  };
+  h.innerHTML=map[v];
+}
+function modeClick(el){
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+const PM={
+  mono: ['1440×720 · 单向','线性'],
+  gray: ['2880×1440 · 双向','线性'],
+  tone: ['2880×1440 · 双向','线性 + G7'],
+  rgb:  ['2880×1440 · 双向','线性 + G7 + ICC'],
+  rgb16:['2880×1440 · 单向','线性 + G7 + ICC'],
+};
+function rgbColorBlock(){
+  return `
+    <div class="adj-lbl">ICC profile（输出）</div>
+    <select class="rp-sel"><option>PhotoRag_P9500_RGB.icc</option></select>
+    <div class="adj-lbl">渲染意图</div>
+    <select class="rp-sel"><option>可感知 Perceptual</option><option>相对色度 Rel.Col</option><option>饱和度</option><option>绝对色度</option></select>
+    <div class="rp-row bpc" style="padding:5px 0 0;" onclick="this.querySelector('input').click()"><span class="rp-k">黑点补偿 BPC</span><input type="checkbox" checked style="width:11px;height:11px;accent-color:#2e7dd7;"></div>
+    <div class="adj-row"><span>饱和度</span><input type="range" class="rsl" value="50"></div>
+    <div class="adj-row"><span>色温</span><input type="range" class="rsl" value="50"></div>
+    <div class="adj-hd">智能建议 + 软打样</div>
+    <div class="cm-hint">GamutAdvisor：此图饱和度高、有天空/肤色 → 建议 <b>可感知</b>。</div>
+    <div style="display:flex;gap:6px;margin-top:5px;"><span class="pbtn">A/B 软打样</span><span class="pbtn">纸白模拟</span></div>
+    <div class="adj-hd">Or / Gr / V 扩展色调用率</div>
+    <div class="ogv"><span class="ol">Or</span><span class="ogvb"><i style="width:42%"></i></span><span class="ov">42%</span></div>
+    <div class="ogv"><span class="ol">Gr</span><span class="ogvb"><i style="width:18%"></i></span><span class="ov">18%</span></div>
+    <div class="ogv"><span class="ol">V</span><span class="ogvb"><i style="width:9%"></i></span><span class="ov">9%</span></div>`;
+}
+function adjHTML(key){
+  if(key==='mono') return `
+    <div class="adj-hd">单黑 · 黑白调整（纯黑单墨）</div>
+    <div class="adj-row"><span>亮度</span><input type="range" class="rsl" value="50"></div>
+    <div class="adj-row"><span>对比</span><input type="range" class="rsl" value="55"></div>
+    <div class="adj-row"><span>灰阶曲线</span><span class="pbtn">编辑曲线</span></div>
+    <div class="cm-hint">单黑只用 K 一条墨：线性好即可打印，这里只调亮度/对比与灰阶曲线，无色彩管理。</div>`;
+  if(key==='gray') return `
+    <div class="adj-hd">黑+灰 · 黑白调整（黑 + 浅灰墨）</div>
+    <div class="adj-row"><span>亮度</span><input type="range" class="rsl" value="50"></div>
+    <div class="adj-row"><span>对比</span><input type="range" class="rsl" value="55"></div>
+    <div class="adj-hd">分区中性微调</div>
+    <div class="adj-row"><span>高光</span><span class="seg-mini"><span class="on">中性</span><span>偏暖</span><span>偏冷</span></span></div>
+    <div class="adj-row"><span>阴影</span><span class="seg-mini"><span class="on">中性</span><span>偏暖</span><span>偏冷</span></span></div>
+    <div class="adj-row"><span>灰阶曲线</span><span class="pbtn">编辑曲线</span></div>
+    <div class="cm-hint">黑 + 浅灰多墨，过渡更细腻；线性做好即可，分区微调保中性。</div>`;
+  if(key==='tone') return `
+    <div class="adj-hd">黑+灰+彩 · 分区色调（黑白基底 + 彩墨上色）</div>
+    <div class="adj-row"><span>高光</span><span class="seg-mini"><span>冷</span><span class="on">中</span><span>暖</span></span></div>
+    <div class="adj-row"><span>中间调</span><span class="seg-mini"><span>冷</span><span class="on">中</span><span>暖</span></span></div>
+    <div class="adj-row"><span>阴影</span><span class="seg-mini"><span class="on">冷</span><span>中</span><span>暖</span></span></div>
+    <div class="adj-row"><span>色调强度</span><input type="range" class="rsl" value="35"></div>
+    <div class="adj-row"><span>亮度 / 对比</span><input type="range" class="rsl" value="50"></div>
+    <div class="cm-hint">黑白基底 + 彩墨做分区调色（split-tone）；用 <b>G7</b> 修正线性、保中性轴。</div>`;
+  if(key==='rgb') return `<div class="adj-hd">RGB · 全面色彩管理</div>`+rgbColorBlock();
+  if(key==='rgb16') return `<div class="adj-hd">16 位 RGB · 全面色彩管理（高精度）</div>`+rgbColorBlock()+`
+    <div class="adj-hd">多光源软打样（同色异谱）</div>
+    <div class="adj-row"><span>光源</span><span class="seg-mini"><span class="on">D50</span><span>D65</span><span>A</span><span>F11</span></span></div>
+    <div class="cm-hint">16-bit 全程无 banding；可切光源检查同色异谱。</div>`;
+  return '';
+}
+const MODE_DAYS={mono:9,gray:9,tone:9,rgb:35,rgb16:9}; // 单一数据源：各模式线性曲线天数
+function pmodeClick(el,name,key){
+  el.parentElement.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  const p=PM[key]||PM.tone;
+  const days=MODE_DAYS[key]||9, stale=days>30;
+  const extra = (key==='rgb'||key==='rgb16') ? '需全面 ICC 色彩管理。'
+              : key==='tone' ? 'G7 修正线性即可。'
+              : '线性好即可打印，无需 G7/ICC。';
+  const h=document.getElementById('pmodeHint');
+  if(h)h.innerHTML='ⓘ 当前 <b>'+name+'</b> · 线性曲线 <b>'+p[0]+'</b>：用 <b>'+p[1]+'</b>。'+extra
+    +(stale?'<br><span style="color:#9a2418;">⚠ <b>线性已 '+days+' 天</b>（超 1 个月）— 先<b style="cursor:pointer;text-decoration:underline;" onclick="openEnvMgr()">检查</b>，不行就重做线性。</span>':'');
+  const a=document.getElementById('modeAdjust');
+  if(a)a.innerHTML=adjHTML(key);
+  // 预检联动：校准行 + 警告数（ICC 不符恒为 1 项）
+  const ic=document.getElementById('pf-cal-ic'), t=document.getElementById('pf-cal-t'), fx=document.getElementById('pf-cal-fix');
+  if(ic&&t){ ic.className= stale?'ti ti-alert-triangle pf-wn':'ti ti-circle-check pf-ok';
+    t.textContent= stale?(name+' 线性 '+days+' 天 · 超 1 个月需检查'):('校准有效 · '+days+' 天'); }
+  if(fx)fx.style.display= stale?'':'none';
+  const n=1+(stale?1:0);
+  const bt=document.getElementById('pf-banner-t'); if(bt)bt.textContent=n+' 项警告，建议处理后打印';
+  const pc=document.getElementById('pfc-t'); if(pc)pc.textContent=n+' 警告';
+  const sb=document.getElementById('sb-info');
+  if(sb)sb.textContent='本图 · '+name+'（'+p[1]+' · '+p[0]+'）· P9500 · Photo Rag 308';
+}
+document.querySelectorAll('.blk').forEach((b,i)=>{
+  if(i!==0)b.querySelectorAll('.hnd').forEach(h=>h.style.display='none');
+});
+(function(){var b=document.querySelector('#t-img .mode-btn.on'); if(b)pmodeClick(b,'黑+灰+彩','tone');})();
+(function(){var sc=document.querySelector('.canvas-scroll'); if(sc)sc.addEventListener('scroll',renderRulers); applyZoom();})();
+
+/* ══ 打印环境管理器 ══ */
+function openEnvMgr(wizard){
+  document.getElementById('envmgr-ov').classList.add('on');
+  if(wizard)emWizard(); else emDetail();
+}
+function closeEnvMgr(){document.getElementById('envmgr-ov').classList.remove('on');}
+function emListSel(el){if(el){document.querySelectorAll('#envmgr-ov .qs-item').forEach(x=>x.classList.remove('on'));el.classList.add('on');}}
+function emDetail(){
+  document.getElementById('em-right').innerHTML=`
+    <div style="font-size:13px;font-weight:700;margin-bottom:2px;">Epson SC-P9500 · Hahnemühle Photo Rag 308</div>
+    <div style="font-size:10px;color:#6b7079;margin-bottom:12px;">墨批 #A7 · 这台机 ＋ 这种纸 的校准</div>
+    <div class="em-sec">
+      <h5>基础校准（打印机 ＋ 纸张 共用）</h5>
+      <div class="em-kv"><span class="k">① 配置打印机</span><span>端口 RAW 9100(PJL) · 墨水分配 ✓（分辨率/方向在线性化时选）</span></div>
+      <div class="em-kv"><span class="k">② 走纸米尺</span><span style="color:#2f8c4f;">打米尺量实长 → +0.3mm 已确认 ✓</span></div>
+      <div class="em-kv"><span class="k">③ 总墨量 TIL</span><span style="color:#2f8c4f;">按本纸 → 260% · 无晕染 ✓</span></div>
+    </div>
+    <div class="em-sec">
+      <h5>5 种打印模式 · 线性曲线（绑定 分辨率＋方向）<span class="tag" style="cursor:pointer;" onclick="emWizard()">重新设定</span></h5>
+      <div class="cmode-row"><span class="mn">单黑</span><span class="dep"><b>1440×720 · 单向</b> · 线性</span><span class="stt qs-badge ok">9天</span><span class="cmode-chk">检查</span></div>
+      <div class="cmode-row"><span class="mn">黑+灰</span><span class="dep"><b>2880×1440 · 双向</b> · 线性</span><span class="stt qs-badge ok">9天</span><span class="cmode-chk">检查</span></div>
+      <div class="cmode-row"><span class="mn">黑+灰+彩</span><span class="dep"><b>2880×1440 · 双向</b> · 线性 ＋ G7</span><span class="stt qs-badge ok">9天</span><span class="cmode-chk">检查</span></div>
+      <div class="cmode-row"><span class="mn">RGB</span><span class="dep"><b>2880×1440 · 双向</b> · 线性 ＋ G7 ＋ ICC</span><span class="stt qs-badge bad">35天</span><span class="cmode-chk" style="border-color:#e6c878;color:#8a6310;">检查</span></div>
+      <div class="cmode-row"><span class="mn">16位RGB</span><span class="dep"><b>2880×1440 · 单向</b> · 线性 ＋ G7 ＋ ICC</span><span class="stt qs-badge ok">9天</span><span class="cmode-chk">检查</span></div>
+      <div class="em-note">每条线性曲线<b>绑定分辨率＋方向（双向/单向）</b>，并写进名字（如 <code>单黑·1440×720·单向</code>）。<b>选中哪条就用那套参数打印</b>。超过 <b>1 个月</b>未用先「检查」（主要查线性），不行就重做线性 — RGB 已 35 天建议检查。</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:2px;">
+      <div class="pbtn"><i class="ti ti-checkup-list"></i>全部检查</div>
+      <div class="pbtn" onclick="emWizard()"><i class="ti ti-refresh"></i>重做线性</div>
+      <div class="pbtn pri" style="margin-left:auto;" onclick="closeEnvMgr()">套用并关闭</div>
+    </div>`;
+}
+function emWizard(){
+  const steps=[
+    ['done','1','添加打印机','从驱动列表选机型 — Epson SC-P9500 · PRO 12 墨','打印机'],
+    ['done','2','配置打印机','端口 RAW 192.168.1.110:9100(PJL) · 墨水分配（分辨率/方向在下面每条线性化时选）','打印机'],
+    ['done','3','添加纸张','从纸张库选 / 新建 — Hahnemühle Photo Rag 308','介质'],
+    ['done','4','打印米尺 → 确认走纸','在这台机打这种纸的米尺，量实际长度校走纸','+0.3mm ✓'],
+    ['cur','5','总墨量（按纸张）','打墨量靶 → i1Pro3 → TIL／晕染阈值 → 260%','总墨量'],
+    ['todo','6a','单黑 · 1440×720 · 单向 · 线性','选分辨率+方向 → 打靶测量 → 线性曲线「单黑·1440×720·单向」','线性'],
+    ['todo','6b','黑+灰 · 2880×1440 · 双向 · 线性','线性曲线「黑+灰·2880×1440·双向」— 线性好即可打印','线性'],
+    ['todo','6c','黑+灰+彩 · 2880×1440 · 双向 · 线性 ＋ G7','G7 修正线性 →「黑+灰+彩·2880×1440·双向」','线性+G7'],
+    ['todo','6d','RGB · 2880×1440 · 双向 · 线性 ＋ G7 ＋ ICC','全面色彩管理（云端 colprof）→「RGB·2880×1440·双向」','全面'],
+    ['todo','6e','16位RGB · 2880×1440 · 单向 · 线性 ＋ G7 ＋ ICC','最高质量走单向 →「16位RGB·2880×1440·单向」','全面'],
+  ];
+  document.getElementById('em-right').innerHTML=
+    `<div style="font-size:13px;font-weight:700;margin-bottom:2px;">新建 / 重做 · 校准向导</div>
+     <div class="em-note" style="margin-bottom:6px;">顺序：<b>打印机 → 配置 → 纸张 → 米尺走纸 → 总墨量 → 5 种模式各自线性</b>。单黑／黑+灰 只要线性；黑+灰+彩 加 G7；RGB／16位RGB 全面 ICC。</div>
+     <div class="em-sec" style="padding:8px 10px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+       <span style="font-size:10px;font-weight:700;color:#23262b;">线性化参数</span>
+       <span style="font-size:9.5px;color:#6b7079;">分辨率</span><select class="tsel" style="height:18px;"><option>2880×1440</option><option>1440×1440</option><option>1440×720</option><option>720×720</option></select>
+       <span style="font-size:9.5px;color:#6b7079;">方向</span><select class="tsel" style="height:18px;"><option>双向（快）</option><option>单向（高质量）</option></select>
+       <span class="em-note" style="margin:0;width:100%;">每条曲线<b>绑定这两个参数并写进名字</b>；选中哪条就用那套参数打印。</span>
+     </div>`
+    + steps.map(s=>`<div class="wz-step ${s[0]}"><div class="n">${s[0]==='done'?'✓':s[1]}</div><div><div class="tt">${s[2]}</div><div class="ss">${s[3]}</div></div><span class="bdg ${s[0]==='done'?'qs-badge ok':s[0]==='cur'?'qs-badge warn':''}" style="${s[0]==='todo'?'background:#eef0f2;color:#868c95;':''}">${s[4]}</span></div>`).join('')
+    + `<div style="display:flex;gap:8px;margin-top:10px;"><div class="pbtn" onclick="emDetail()"><i class="ti ti-arrow-left"></i>返回详情</div><div class="pbtn pri" style="margin-left:auto;"><i class="ti ti-player-play"></i>继续校准</div></div>`;
+}
+</script>
+</body>
+</html>

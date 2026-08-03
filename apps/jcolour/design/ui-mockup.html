@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jcolour · 介面設計稿</title>
+<style>
+  :root{
+    --accent:#2e7dd7; --accent-soft:#eaf2fc; --accent-deep:#1f5fa8;
+    --card:#ffffff; --card-hover:#f4f8fd; --border:#d2d5d9; --bar-bg:#e3e5e8;
+    --title:#23262b; --sub:#868c95; --bg:#ececee;
+    --ok:#2f8c4f; --ok-soft:#e8f5ec; --warn:#c98a17; --warn-soft:#fbf2dd;
+    --bad:#c0392b; --bad-soft:#fbe9e7; --shadow:0 1px 3px rgba(0,0,0,.08);
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",
+           "PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#c9ccd1;color:var(--title);
+       -webkit-font-smoothing:antialiased;padding:22px;display:flex;
+       justify-content:center}
+
+  /* ---- macOS window chrome ---- */
+  .win{width:1240px;height:820px;background:var(--bg);border-radius:11px;
+       box-shadow:0 22px 60px rgba(0,0,0,.32);overflow:hidden;display:flex;
+       flex-direction:column;border:1px solid #b7bبbf}
+  .titlebar{height:38px;background:linear-gradient(#f7f7f8,#ececee);
+       border-bottom:1px solid var(--border);display:flex;align-items:center;
+       padding:0 14px;gap:8px;position:relative}
+  .traffic{width:12px;height:12px;border-radius:50%}
+  .t-red{background:#ff5f57}.t-yellow{background:#febc2e}.t-green{background:#28c840}
+  .titlebar .wt{position:absolute;left:0;right:0;text-align:center;font-size:13px;
+       font-weight:600;color:#54585f;pointer-events:none}
+
+  .body{flex:1;display:flex;min-height:0}
+
+  /* ---- sidebar (two paths) ---- */
+  .side{width:194px;background:#f5f5f7;border-right:1px solid var(--border);
+        padding:14px 10px;display:flex;flex-direction:column;gap:3px}
+  .side .logo{font-size:17px;font-weight:700;letter-spacing:.5px;padding:6px 10px 14px;
+        color:var(--title)}
+  .side .logo span{color:var(--accent)}
+  .navgrp{font-size:10px;letter-spacing:1.5px;color:#a3a8b0;padding:12px 11px 5px}
+  .nav{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:7px;
+       font-size:13.5px;color:#3b3f46;cursor:pointer;font-weight:500}
+  .nav .ic{width:18px;text-align:center;font-size:14px}
+  .nav:hover{background:#ececef}
+  .nav.active{background:var(--accent);color:#fff;box-shadow:var(--shadow)}
+  .nav.active .ic{filter:brightness(3)}
+  .side .spacer{flex:1}
+  .side .foot{font-size:11px;color:#a3a8b0;padding:8px 11px}
+
+  /* ---- main column ---- */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .page{display:none;flex:1;flex-direction:column;min-height:0}
+  .page.show{display:flex}
+
+  /* ---- print-type bar (5 cards) ---- */
+  .typebar{background:var(--bar-bg);border-bottom:1px solid var(--border);
+       padding:11px 16px}
+  .typebar .lbl{font-size:10.5px;letter-spacing:2px;color:var(--sub);margin-bottom:8px}
+  .cards{display:flex;gap:9px}
+  .card{flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;
+        padding:9px 11px;cursor:pointer;min-height:52px}
+  .card:hover{background:var(--card-hover)}
+  .card.sel{background:var(--accent-soft);border:2px solid var(--accent);padding:8px 10px}
+  .card .ct{font-size:13.5px;font-weight:700;color:var(--title)}
+  .card.sel .ct{color:var(--accent-deep)}
+  .card .cs{font-size:10.5px;color:var(--sub);margin-top:3px}
+  .card .ch{font-size:10px;color:#b0b5bd;margin-top:5px;font-family:ui-monospace,monospace}
+
+  /* ---- work area: preview + inspector ---- */
+  .work{flex:1;display:flex;min-height:0}
+  .ctxbar{height:42px;background:#fafafb;border-bottom:1px solid var(--border);
+       display:flex;align-items:center;gap:8px;padding:0 16px;font-size:12.5px}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:#fff;
+       border:1px solid var(--border);border-radius:7px;padding:5px 11px;cursor:pointer}
+  .pill b{font-weight:600}
+  .pill .cv{color:var(--sub)}
+  .pill .chev{color:#b0b5bd;font-size:10px}
+  .ctxbar .gap{flex:1}
+
+  .canvas{flex:1;background:repeating-conic-gradient(#dfe1e4 0% 25%,#e9ebee 0% 50%)
+       0/22px 22px;display:flex;align-items:center;justify-content:center;position:relative;
+       min-width:0}
+  .sheet{width:60%;max-width:430px;aspect-ratio:4/5;background:#fff;box-shadow:0 6px 22px rgba(0,0,0,.18);
+       position:relative;overflow:hidden}
+  .sheet img{width:100%;height:100%;object-fit:cover;display:block}
+  .photo{width:100%;height:100%;background:
+        linear-gradient(160deg,#2b3a52 0%,#456585 38%,#9bb4c9 60%,#d8c9a6 78%,#7a5c3a 100%);}
+  .deframe{position:absolute;inset:9%;border:1px dashed rgba(255,255,255,.6)}
+  .softproof-tag{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.55);color:#fff;
+       font-size:10.5px;padding:3px 8px;border-radius:5px}
+  .de-spot{position:absolute;border-radius:50%;mix-blend-mode:multiply}
+
+  /* inspector */
+  .insp{width:280px;background:#fafafb;border-left:1px solid var(--border);
+        display:flex;flex-direction:column;min-height:0}
+  .insp .scroll{flex:1;overflow:auto;padding:14px}
+  .sect{border:1px solid var(--border);border-radius:8px;background:#fff;margin-bottom:11px}
+  .sect>h4{font-size:12px;font-weight:700;padding:9px 12px;border-bottom:1px solid #eee;
+       display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+  .sect>h4 .tw{color:#b0b5bd;font-size:10px;font-weight:500}
+  .sect .in{padding:11px 12px;display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+  .row label{color:var(--sub)}
+  .selctl{border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:12px;
+       background:#fff;display:flex;align-items:center;gap:6px;cursor:pointer}
+  .seg{display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden}
+  .seg div{flex:1;text-align:center;font-size:11.5px;padding:6px 4px;cursor:pointer;color:#555}
+  .seg div.on{background:var(--accent);color:#fff;font-weight:600}
+  .hint{font-size:11px;color:var(--accent-deep);background:var(--accent-soft);
+       border-radius:6px;padding:7px 9px;line-height:1.45}
+  .hint b{font-weight:700}
+  .slider{height:4px;background:#dde0e4;border-radius:2px;position:relative;margin:7px 2px}
+  .slider .kn{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;
+       background:#fff;border:1px solid var(--accent);transform:translate(-50%,-50%);box-shadow:var(--shadow)}
+  .slider .tk{position:absolute;top:-16px;font-size:9.5px;color:var(--sub);transform:translateX(-50%)}
+
+  /* ---- pre-print status gate ---- */
+  .gate{border-top:1px solid var(--border);padding:11px 13px;background:#fff;
+       display:flex;flex-direction:column;gap:9px}
+  .checks{display:flex;flex-direction:column;gap:7px}
+  .chk{display:flex;align-items:center;gap:9px;font-size:12px}
+  .chk .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .chk .nm{font-weight:600;width:96px;flex:none}
+  .chk .ds{color:var(--sub);flex:1}
+  .chk .act{font-size:11px;color:var(--accent);cursor:pointer;font-weight:600}
+  .d-ok{background:var(--ok)} .d-warn{background:var(--warn)} .d-bad{background:var(--bad)}
+  .banner{border-radius:7px;padding:9px 11px;font-size:12px;display:flex;align-items:center;gap:9px}
+  .banner.ok{background:var(--ok-soft);color:#1d6b39}
+  .banner.warn{background:var(--warn-soft);color:#8a6310}
+  .banner.bad{background:var(--bad-soft);color:#9a2418}
+  .banner .bt{font-weight:700}
+  .printbtn{display:flex;gap:9px;align-items:center}
+  .btn{border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;
+       cursor:pointer;font-family:var(--font)}
+  .btn.primary{background:var(--accent);color:#fff;flex:1}
+  .btn.primary:disabled{background:#bcc3cb;cursor:not-allowed}
+  .btn.ghost{background:#fff;border:1px solid var(--border);color:#444}
+  .btn.amber{background:var(--warn);color:#fff}
+
+  /* ---- Path B : calibration stepper ---- */
+  .calwrap{flex:1;display:flex;min-height:0}
+  .steps{width:250px;background:#fafafb;border-right:1px solid var(--border);padding:18px 14px;
+       display:flex;flex-direction:column;gap:3px;overflow:auto}
+  .steps .pt{font-size:10.5px;letter-spacing:1.5px;color:#a3a8b0;margin:6px 6px 10px}
+  .step{display:flex;gap:11px;padding:10px 9px;border-radius:8px;cursor:pointer;align-items:flex-start}
+  .step:hover{background:#f0f1f3}
+  .step.cur{background:var(--accent-soft)}
+  .step .num{width:22px;height:22px;border-radius:50%;border:1.5px solid #c4c9d0;color:#9aa0a8;
+       font-size:11px;display:flex;align-items:center;justify-content:center;flex:none;font-weight:700}
+  .step.done .num{background:var(--ok);border-color:var(--ok);color:#fff}
+  .step.cur .num{border-color:var(--accent);color:var(--accent)}
+  .step .stt{font-size:13px;font-weight:600}
+  .step.cur .stt{color:var(--accent-deep)}
+  .step .sts{font-size:10.5px;color:var(--sub);margin-top:2px;line-height:1.4}
+  .step .badge{font-size:9.5px;padding:1px 6px;border-radius:4px;margin-top:4px;display:inline-block}
+  .b-stored{background:var(--ok-soft);color:#1d6b39}
+  .b-fresh{background:var(--accent-soft);color:var(--accent-deep)}
+  .b-todo{background:var(--warn-soft);color:#8a6310}
+
+  .calmain{flex:1;padding:26px 30px;overflow:auto}
+  .calmain h2{font-size:20px;font-weight:700;margin-bottom:5px}
+  .calmain .lead{font-size:13px;color:var(--sub);margin-bottom:20px;line-height:1.55;max-width:560px}
+  .panel{border:1px solid var(--border);border-radius:10px;background:#fff;padding:20px;max-width:620px;
+       box-shadow:var(--shadow)}
+  .nozzle{display:grid;grid-template-columns:repeat(11,1fr);gap:4px;margin:14px 0}
+  .nozzle i{height:46px;border-radius:2px;display:block}
+  .infoline{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:10px 12px;border-radius:8px;
+       background:#f6f7f9;margin-top:14px}
+  .kv{display:flex;justify-content:space-between;font-size:12.5px;padding:8px 0;border-bottom:1px solid #f0f0f2}
+  .kv:last-child{border:none}.kv .k{color:var(--sub)}.kv .v{font-weight:600}
+  .calbtns{display:flex;gap:10px;margin-top:20px}
+  .tag{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:600}
+
+  .legend{display:flex;gap:16px;font-size:11px;color:var(--sub);margin-top:14px;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:6px}
+
+  /* ---- Path B : library (existing configs) ---- */
+  .libwrap{flex:1;display:flex;flex-direction:column;min-height:0;background:#f6f7f9}
+  .libhead{padding:22px 30px 14px;display:flex;align-items:flex-end;justify-content:space-between}
+  .libhead h2{font-size:21px;font-weight:700}
+  .libhead .sub{font-size:12.5px;color:var(--sub);margin-top:4px}
+  .libtools{display:flex;gap:10px;align-items:center}
+  .search{border:1px solid var(--border);border-radius:8px;background:#fff;padding:7px 12px;font-size:12.5px;
+       color:var(--sub);width:200px}
+  .libscroll{flex:1;overflow:auto;padding:4px 30px 26px}
+  .lthead{display:grid;grid-template-columns:1.7fr 1fr 1.9fr 1fr 0.9fr 0.7fr;gap:12px;
+       font-size:10.5px;letter-spacing:.5px;color:#a3a8b0;padding:8px 16px}
+  .lrow{display:grid;grid-template-columns:1.7fr 1fr 1.9fr 1fr 0.9fr 0.7fr;gap:12px;align-items:center;
+       background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:9px;
+       box-shadow:var(--shadow);cursor:pointer}
+  .lrow:hover{border-color:#b9d4f2}
+  .lrow .pn{font-size:13.5px;font-weight:700}
+  .lrow .pmeta{font-size:11px;color:var(--sub);margin-top:2px}
+  .lrow .cell{font-size:12px;color:#4a4e55}
+  .modes{display:flex;gap:4px}
+  .mchip{font-size:10px;font-weight:700;width:22px;height:20px;border-radius:5px;display:flex;
+       align-items:center;justify-content:center;border:1px solid #e2e4e7}
+  .mchip.on{background:var(--ok-soft);color:#1d6b39;border-color:#bfe3c9}
+  .mchip.off{background:#f1f2f4;color:#c2c6cc}
+  .statetag{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;display:inline-flex;
+       align-items:center;gap:6px}
+  .st-ready{background:var(--ok-soft);color:#1d6b39}
+  .st-stale{background:var(--warn-soft);color:#8a6310}
+  .st-recal{background:var(--bad-soft);color:#9a2418}
+  .rowbtn{font-size:11.5px;font-weight:600;color:var(--accent);border:1px solid #cfe0f4;background:#fff;
+       border-radius:7px;padding:6px 12px;cursor:pointer}
+  .newrow{display:flex;align-items:center;gap:11px;background:#fff;border:1.5px dashed #c2cdd9;border-radius:10px;
+       padding:16px;margin-bottom:9px;cursor:pointer;color:var(--accent-deep)}
+  .newrow .plus{width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
+       font-size:18px;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .backbtn{font-size:12.5px;color:var(--accent);cursor:pointer;font-weight:600;margin-bottom:14px;display:inline-block}
+
+  /* ---- config cards (versioned, enable/disable, auto/full recal) ---- */
+  .cfgcard{background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 16px;
+       margin-bottom:10px;box-shadow:var(--shadow)}
+  .cfgcard.off{background:#f4f5f7;border-style:dashed;opacity:.74}
+  .cfgtop{display:flex;align-items:center;gap:13px}
+  .tglwrap{display:flex;flex-direction:column;align-items:center;gap:3px;flex:none}
+  .tglwrap small{font-size:9px;color:var(--sub)}
+  .tgl{width:38px;height:22px;border-radius:11px;background:var(--ok);position:relative;cursor:pointer}
+  .tgl.no{background:#c4c9d0}
+  .tgl::after{content:"";position:absolute;top:2px;left:18px;width:18px;height:18px;border-radius:50%;
+       background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+  .tgl.no::after{left:2px}
+  .cfgname{flex:1;min-width:0}
+  .cfgname .cn{font-size:14px;font-weight:700}
+  .cfgname .cp{font-size:11px;color:var(--sub);margin-top:2px}
+  .cfgstat{flex:none}
+  .cfgacts{display:flex;gap:7px;align-items:stretch;flex:none}
+  .btn-auto,.btn-recal,.btn-mini{border-radius:7px;cursor:pointer;font-weight:600;
+       display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25;
+       font-size:11.5px;padding:6px 11px}
+  .btn-auto{color:#1d6b39;background:var(--ok-soft);border:1px solid #bfe3c9}
+  .btn-recal{color:var(--accent);background:#fff;border:1px solid #cfe0f4}
+  .btn-mini{color:#666;background:#fff;border:1px solid var(--border)}
+  .btn-auto small,.btn-recal small{font-size:9px;font-weight:500;opacity:.82}
+  .modes2{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;padding-left:51px}
+  .mode2{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:5px 10px;
+       border-radius:7px;border:1px solid #e2e4e7}
+  .mode2.on{background:var(--ok-soft);color:#1d6b39;border-color:#bfe3c9}
+  .mode2.off{background:#f1f2f4;color:#aeb3b9}
+  .mode2 .mk{font-size:10px}
+
+  /* ===== v2 redesign : slim type bar (segmented) ===================== */
+  .typebar.slim{padding:8px 16px}
+  .seg-modes{display:flex;background:#fff;border:1px solid var(--border);border-radius:9px;
+       overflow:hidden}
+  .seg-modes .sm{flex:1;padding:7px 6px;text-align:center;cursor:pointer;border-right:1px solid var(--border);
+       line-height:1.25}
+  .seg-modes .sm:last-child{border-right:none}
+  .seg-modes .sm:hover{background:var(--card-hover)}
+  .seg-modes .sm.sel{background:var(--accent-soft)}
+  .seg-modes .sm .t{font-size:12.5px;font-weight:700;color:var(--title)}
+  .seg-modes .sm.sel .t{color:var(--accent-deep)}
+  .seg-modes .sm .c{font-size:9.5px;color:#b0b5bd;font-family:ui-monospace,monospace;margin-top:1px}
+
+  /* ===== preview toggle toolbar ===================================== */
+  .ptools{display:flex;align-items:center;gap:16px;padding:7px 14px;background:#f4f5f7;
+       border-bottom:1px solid var(--border);font-size:11.5px;color:#4a4e55}
+  .ptools .tog{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .ptools .box{width:14px;height:14px;border-radius:4px;border:1px solid #b6bcc4;background:#fff;
+       display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
+  .ptools .tog.on .box{background:var(--accent);border-color:var(--accent)}
+  .ptools .gap{flex:1}
+  .ptools .zoom{color:var(--sub)}
+
+  /* ===== accordion inspector ======================================= */
+  .insp.v2 .scroll{padding:10px}
+  .sect.acc{margin-bottom:8px}
+  .sect.acc>h4{border-bottom:none}
+  .sect.acc>h4 .chev{color:#b0b5bd;font-size:11px;transition:transform .15s}
+  .sect.acc .in{display:none;border-top:1px solid #eee}
+  .sect.acc.open>h4 .chev{transform:rotate(90deg)}
+  .sect.acc.open .in{display:flex}
+  .sect.acc>h4 .badge2{font-size:9.5px;font-weight:600;color:var(--sub);background:#f1f2f4;
+       border-radius:5px;padding:1px 7px}
+
+  /* Mirage-style detail rows */
+  .frow{display:grid;grid-template-columns:74px 1fr;align-items:center;gap:8px;font-size:11.5px}
+  .frow>label{color:var(--sub)}
+  .fnum{display:flex;align-items:center;gap:5px}
+  .inp{border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11.5px;background:#fff;
+       min-width:0;flex:1;color:var(--title)}
+  .unit{border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:11px;background:#fff;
+       color:#555;cursor:pointer;flex:none;display:flex;align-items:center;gap:4px}
+  .pct{font-size:10.5px;color:var(--sub);flex:none}
+  .radios{display:flex;flex-direction:column;gap:6px}
+  .rad{display:flex;align-items:center;gap:7px;font-size:11.5px;color:#3b3f46;cursor:pointer}
+  .rad .ring{width:13px;height:13px;border-radius:50%;border:1px solid #b6bcc4;flex:none;position:relative}
+  .rad.on .ring{border-color:var(--accent)}
+  .rad.on .ring::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent)}
+  .bordercross{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,auto);gap:5px;
+       align-items:center;justify-items:center}
+  .bordercross .inp{width:54px;flex:none;text-align:center}
+  .bordercross .c-t{grid-column:2;grid-row:1}.bordercross .c-l{grid-column:1;grid-row:2}
+  .bordercross .c-m{grid-column:2;grid-row:2;color:#b0b5bd;font-size:11px}
+  .bordercross .c-r{grid-column:3;grid-row:2}.bordercross .c-b{grid-column:2;grid-row:3}
+  .swatch{display:flex;align-items:center;gap:6px}
+  .swatch .sw{width:22px;height:22px;border:1px solid var(--border);border-radius:5px;background:#fff}
+  .swatch .pick{width:24px;height:22px;border:1px solid var(--border);border-radius:5px;background:#fafafb;
+       display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px}
+  .minibtns{display:flex;gap:7px}
+  .minibtns .mb{border:1px solid var(--border);background:#fff;border-radius:6px;padding:5px 12px;
+       font-size:11.5px;font-weight:600;color:#444;cursor:pointer}
+
+  /* ===== bottom gate bar (full width, pinned) ====================== */
+  .gatebar{border-top:1px solid var(--border);background:#fff;display:flex;align-items:center;
+       gap:16px;padding:9px 16px;flex:none}
+  .gatebar .checks{flex-direction:row;gap:18px}
+  .gatebar .chk .nm{width:auto}
+  .gatebar .chk .ds{flex:none}
+  .gatebar .mid{flex:1;display:flex;justify-content:center}
+  .gatebar .banner{margin:0}
+  .gatebar .printbtn{flex:none}
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <div class="traffic t-red"></div><div class="traffic t-yellow"></div><div class="traffic t-green"></div>
+    <div class="wt">jcolour — Epson SureColor P9500</div>
+  </div>
+
+  <div class="body">
+    <!-- ===== Sidebar : two paths ===== -->
+    <div class="side">
+      <div class="logo">j<span>colour</span></div>
+      <div class="navgrp">主要</div>
+      <div class="nav active" data-go="print"><span class="ic">🖨</span>列印</div>
+      <div class="nav" data-go="cal"><span class="ic">🎯</span>建檔校準</div>
+      <div class="navgrp">其他</div>
+      <div class="nav"><span class="ic">🕘</span>記錄</div>
+      <div class="nav"><span class="ic">⚙️</span>設定</div>
+      <div class="spacer"></div>
+      <div class="foot">P9500 · 已連線<br>墨批 #A7 · 11 色就緒</div>
+    </div>
+
+    <div class="main">
+
+      <!-- ============ PATH A : PRINT ============ -->
+      <div class="page show" id="page-print">
+        <div class="typebar slim">
+          <div class="seg-modes">
+            <div class="sm"><div class="t">單黑</div><div class="c">WF1 · 1ch</div></div>
+            <div class="sm"><div class="t">黑+淺灰</div><div class="c">WF2 · 3ch</div></div>
+            <div class="sm sel"><div class="t">黑+淺灰+四色</div><div class="c">WF3 · 6ch</div></div>
+            <div class="sm"><div class="t">RGB</div><div class="c">WF4</div></div>
+            <div class="sm"><div class="t">16-bit RGB</div><div class="c">WF6</div></div>
+          </div>
+        </div>
+
+        <div class="work">
+          <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+            <div class="ctxbar">
+              <div class="pill"><span class="cv">打印機</span><b>P9500</b><span class="chev">▾</span></div>
+              <div class="pill"><span class="cv">紙張</span><b>Hahnemühle Photo Rag</b><span class="chev">▾</span></div>
+              <div class="pill"><span class="cv">尺寸</span><b>A2 · 縱向</b><span class="chev">▾</span></div>
+              <div class="gap"></div>
+              <div class="pill"><span class="cv">輸出</span><b>24″ × 36″</b><span class="chev">▾</span></div>
+            </div>
+            <div class="ptools">
+              <div class="tog on"><span class="box">✓</span>軟打樣</div>
+              <div class="tog on"><span class="box">✓</span>紙白模擬</div>
+              <div class="tog"><span class="box"></span>色域警告</div>
+              <div class="tog on"><span class="box">✓</span>顯示資訊</div>
+              <div class="gap"></div>
+              <div class="zoom">⊟ 符合視窗 · 100%</div>
+            </div>
+            <div class="canvas">
+              <div class="sheet">
+                <div class="photo"></div>
+                <div class="de-spot" style="left:18%;top:62%;width:60px;height:40px;background:rgba(200,40,40,.35)"></div>
+                <div class="deframe"></div>
+                <div class="softproof-tag">◐ 軟打樣 · ΔE 熱區 1 處</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- inspector (accordion · one section open at a time) -->
+          <div class="insp v2">
+            <div class="scroll">
+
+              <div class="sect acc"><h4>紙張與色彩 <span class="chev">▸</span></h4>
+                <div class="in">
+                  <div class="frow"><label>ICC 描述檔</label><div class="selctl">PhotoRag_P9500_WF3 ▾</div></div>
+                  <div class="frow"><label>渲染意圖</label><div class="selctl">Perceptual ▾</div></div>
+                  <div class="hint">ⓘ 已替你推薦 <b>Perceptual</b>：此圖飽和度高、有大面積天空與膚色。</div>
+                </div>
+              </div>
+
+              <div class="sect acc open"><h4>黑白色調（WF3）<span class="chev">▸</span></h4>
+                <div class="in">
+                  <div class="seg"><div>單黑</div><div>黑+淺灰</div><div class="on">＋四色</div></div>
+                  <div class="row"><label>分區色調</label></div>
+                  <div class="slider"><div class="tk" style="left:18%">高光暖</div><div class="kn" style="left:18%"></div></div>
+                  <div class="slider"><div class="tk" style="left:50%">中間中性</div><div class="kn" style="left:50%"></div></div>
+                  <div class="slider"><div class="tk" style="left:74%">陰影冷</div><div class="kn" style="left:74%"></div></div>
+                </div>
+              </div>
+
+              <div class="sect acc"><h4>紙張 <span class="chev">▸</span></h4>
+                <div class="in">
+                  <div class="frow"><label>來源</label><div class="selctl" style="flex:1">紙捲（自動）· 裁切 ▾</div></div>
+                  <div class="frow"><label>寬度</label><div class="fnum"><span class="inp">60.96</span><span class="unit">cm ▾</span></div></div>
+                  <div class="frow"><label>高度</label><div class="fnum"><span class="inp">191.05</span><span class="unit">cm ▾</span></div></div>
+                  <div class="frow"><label>標準尺寸</label><div class="selctl">24 in (61.0 cm) ▾</div></div>
+                  <div class="frow"><label>無邊</label><div class="selctl">一般邊界 ▾</div></div>
+                </div>
+              </div>
+
+              <div class="sect acc"><h4>影像尺寸 <span class="chev">▸</span></h4>
+                <div class="in">
+                  <div class="radios">
+                    <div class="rad"><span class="ring"></span>符合頁面</div>
+                    <div class="rad"><span class="ring"></span>符合寬度</div>
+                    <div class="rad"><span class="ring"></span>填滿頁面</div>
+                    <div class="rad on"><span class="ring"></span>自訂</div>
+                  </div>
+                  <div class="frow"><label>寬度</label><div class="fnum"><span class="inp">20.61</span><span class="unit">in ▾</span><span class="pct">77.9%</span></div></div>
+                  <div class="frow"><label>高度</label><div class="fnum"><span class="inp">13.71</span><span class="unit">in ▾</span><span class="pct">77.9%</span></div></div>
+                </div>
+              </div>
+
+              <div class="sect acc"><h4>邊界 <span class="chev">▸</span></h4>
+                <div class="in">
+                  <div class="bordercross">
+                    <span class="inp c-t">4.00</span>
+                    <span class="inp c-l">4.00</span><span class="c-m">⊞</span><span class="inp c-r">4.00</span>
+                    <span class="inp c-b">4.00</span>
+                  </div>
+                  <div class="frow"><label>單位</label><div class="unit">cm ▾</div></div>
+                  <div class="radios">
+                    <div class="rad on"><span class="ring"></span>留白</div>
+                    <div class="rad"><span class="ring"></span>填色</div>
+                    <div class="rad"><span class="ring"></span>鏡像延伸</div>
+                  </div>
+                  <div class="frow"><label>填色</label><div class="swatch"><span class="sw"></span><span class="pick">🖉</span></div></div>
+                  <div class="frow"><label>繃框邊</label><div class="selctl">無 ▾</div></div>
+                </div>
+              </div>
+
+              <div class="sect acc"><h4>旋轉 / 裁切 <span class="chev">▸</span></h4>
+                <div class="in">
+                  <div class="frow"><label>旋轉</label><div class="selctl">不旋轉 ▾</div></div>
+                  <div class="frow"><label>裁切寬</label><div class="fnum"><span class="inp">67.20</span><span class="unit">cm ▾</span></div></div>
+                  <div class="frow"><label>裁切高</label><div class="fnum"><span class="inp">44.68</span><span class="unit">cm ▾</span></div></div>
+                  <div class="frow"><label>錨點</label><div class="selctl">置中 ▾</div></div>
+                  <div class="frow"><label>水平位移</label><div class="fnum"><span class="inp">0.00</span><span class="unit">cm ▾</span></div></div>
+                  <div class="frow"><label>垂直位移</label><div class="fnum"><span class="inp">0.00</span><span class="unit">cm ▾</span></div></div>
+                  <div class="minibtns"><span class="mb">裁切…</span><span class="mb">重設</span></div>
+                </div>
+              </div>
+
+              <div class="sect acc"><h4>進階微調 <span class="chev">▸</span></h4>
+                <div class="in"><div class="hint">墨量上限、疊印補償、青銅化控制…（依模式顯示）</div></div>
+              </div>
+              <div class="sect acc"><h4>拼版 / 版次 <span class="badge2">23 / 50</span><span class="chev">▸</span></h4>
+                <div class="in">
+                  <div class="frow"><label>版次</label><div class="fnum"><span class="inp">23</span><span class="pct">/ 50</span></div></div>
+                  <div class="frow"><label>拼版</label><div class="selctl">單張 ▾</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- pre-print status gate · pinned full-width bottom bar -->
+        <div class="gatebar">
+          <div class="checks">
+            <div class="chk"><span class="dot d-ok"></span><span class="nm">噴頭</span><span class="ds">2.1h</span></div>
+            <div class="chk"><span class="dot d-ok"></span><span class="nm">走紙</span><span class="ds">+0.3mm</span></div>
+            <div class="chk"><span class="dot d-warn"></span><span class="nm">校準</span><span class="ds">略過期</span><span class="act">重校</span></div>
+            <div class="chk"><span class="dot d-ok"></span><span class="nm">品質</span><span class="ds">已通過</span></div>
+          </div>
+          <div class="mid"><div class="banner warn"><span class="bt">可列印</span> · 校準略舊，建議重校；仍可繼續。</div></div>
+          <div class="printbtn">
+            <button class="btn ghost">測試列印</button>
+            <button class="btn primary" style="flex:none">列印 · 第 23/50 張</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ PATH B : CALIBRATION LIBRARY (landing) ============ -->
+      <div class="page" id="page-cal">
+        <div class="libwrap">
+          <div class="libhead">
+            <div>
+              <h2>建檔校準</h2>
+              <div class="sub">已建好的紙張標準 · 列印時向這些標準對齊 · 開關控制哪些配置起作用</div>
+            </div>
+            <div class="libtools">
+              <div class="search">🔍 搜尋紙張…</div>
+              <button class="btn primary" style="flex:none" data-go2="calnew">＋ 新建校準</button>
+            </div>
+          </div>
+          <div class="libscroll">
+
+            <!-- Photo Rag v2 · 啟用 · 略過期 → 自動校準候選 -->
+            <div class="cfgcard">
+              <div class="cfgtop">
+                <div class="tglwrap"><div class="tgl"></div><small>啟用</small></div>
+                <div class="cfgname">
+                  <div class="cn">Photo Rag · 標準 v2</div>
+                  <div class="cp">Hahnemühle Photo Rag · Matte 308 · P9500 · 墨批 #A7 · 9 天前</div>
+                </div>
+                <div class="cfgstat"><span class="statetag st-stale">● 略過期</span></div>
+                <div class="cfgacts">
+                  <button class="btn-auto" title="自動量測並比對線性，只有線性部分超標才重建線性，不動 ICC">自動校驗<small>比對線性+G7</small></button>
+                  <button class="btn-recal" data-go2="calnew" title="從頭重建完整配置，自動命名為下一版（v2 / v3…），不覆蓋舊配置">重新校正<small>另存 v2/v3</small></button>
+                  <button class="btn-mini">⋯</button>
+                </div>
+              </div>
+              <div class="modes2">
+                <span class="mode2 on"><span class="mk">✓</span>單黑</span>
+                <span class="mode2 on"><span class="mk">✓</span>黑+淺灰</span>
+                <span class="mode2 on"><span class="mk">✓</span>黑+淺灰+四色</span>
+                <span class="mode2 on"><span class="mk">✓</span>RGB</span>
+                <span class="mode2 on"><span class="mk">✓</span>16-bit RGB</span>
+              </div>
+            </div>
+
+            <!-- Photo Rag v1 · 停用（保留不刪，不參與列印） -->
+            <div class="cfgcard off">
+              <div class="cfgtop">
+                <div class="tglwrap"><div class="tgl no"></div><small>停用</small></div>
+                <div class="cfgname">
+                  <div class="cn">Photo Rag · 標準 v1（舊）</div>
+                  <div class="cp">保留供回溯 · 不參與列印 · 重新校正前的版本 · 30 天前</div>
+                </div>
+                <div class="cfgstat"><span class="statetag" style="background:#eceef0;color:#9aa0a8">⊘ 已停用</span></div>
+                <div class="cfgacts">
+                  <button class="btn-mini">啟用</button>
+                  <button class="btn-mini">刪除</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Canson · 啟用 · READY · 16-bit 未建 -->
+            <div class="cfgcard">
+              <div class="cfgtop">
+                <div class="tglwrap"><div class="tgl"></div><small>啟用</small></div>
+                <div class="cfgname">
+                  <div class="cn">Canson Baryta · 標準</div>
+                  <div class="cp">Canson Infinity Baryta · Gloss 310 · P9500 · 墨批 #A7 · 2 天前</div>
+                </div>
+                <div class="cfgstat"><span class="statetag st-ready">● READY</span></div>
+                <div class="cfgacts">
+                  <button class="btn-auto" title="自動量測並比對線性，只有線性部分超標才重建線性">自動校驗<small>比對線性+G7</small></button>
+                  <button class="btn-recal" data-go2="calnew" title="從頭重建完整配置，自動命名為下一版（v2 / v3…），不覆蓋舊配置">重新校正<small>另存 v2/v3</small></button>
+                  <button class="btn-mini">⋯</button>
+                </div>
+              </div>
+              <div class="modes2">
+                <span class="mode2 on"><span class="mk">✓</span>單黑</span>
+                <span class="mode2 on"><span class="mk">✓</span>黑+淺灰</span>
+                <span class="mode2 on"><span class="mk">✓</span>黑+淺灰+四色</span>
+                <span class="mode2 on"><span class="mk">✓</span>RGB</span>
+                <span class="mode2 off"><span class="mk">＋</span>16-bit RGB · 未建</span>
+              </div>
+            </div>
+
+            <!-- Epson Legacy · 墨批已變 → 自動校準不適用、重新校正高亮 -->
+            <div class="cfgcard">
+              <div class="cfgtop">
+                <div class="tglwrap"><div class="tgl"></div><small>啟用</small></div>
+                <div class="cfgname">
+                  <div class="cn">Legacy Fibre · 標準</div>
+                  <div class="cp">Epson Legacy Fibre · Baryta 325 · P9500 · <b style="color:var(--bad)">墨批 #A6 舊批</b> · 21 天前</div>
+                </div>
+                <div class="cfgstat"><span class="statetag st-recal">● 墨批已變</span></div>
+                <div class="cfgacts">
+                  <button class="btn-auto" style="opacity:.45;cursor:not-allowed" title="墨批已換，線性偏移過大，自動校準不適用，需重新校正">自動校準<small>不適用</small></button>
+                  <button class="btn-recal" data-go2="calnew" title="從頭重建完整配置，自動命名為下一版（v2 / v3…），不覆蓋舊配置">重新校正<small>另存 v2/v3</small></button>
+                  <button class="btn-mini">⋯</button>
+                </div>
+              </div>
+              <div class="modes2">
+                <span class="mode2 on"><span class="mk">✓</span>單黑</span>
+                <span class="mode2 on"><span class="mk">✓</span>黑+淺灰</span>
+                <span class="mode2 on"><span class="mk">✓</span>黑+淺灰+四色</span>
+                <span class="mode2 on"><span class="mk">✓</span>RGB</span>
+                <span class="mode2 on"><span class="mk">✓</span>16-bit RGB</span>
+              </div>
+            </div>
+
+            <div class="newrow" data-go2="calnew">
+              <div class="plus">＋</div>
+              <div><div style="font-weight:700;font-size:13.5px">新建校準</div>
+                <div style="font-size:11.5px;color:var(--sub)">選打印機 → 建紙張 → 走紙米尺 → 選儀器 → 5 種列印方式自動校準 → 存標準</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ PATH B : NEW CALIBRATION (stepper) ============ -->
+      <div class="page" id="page-calnew">
+        <div class="calwrap">
+          <div class="steps">
+            <div class="pt">新建校準集</div>
+            <div class="step done"><div class="num">✓</div><div><div class="stt">選打印機</div>
+              <div class="sts">Epson SC-P9500</div><span class="badge b-fresh">SN X9PK004821</span></div></div>
+            <div class="step done"><div class="num">✓</div><div><div class="stt">建立紙張</div>
+              <div class="sts">Hahnemühle Photo Rag · Matte 308 · 墨批 #A7</div></div></div>
+            <div class="step done"><div class="num">✓</div><div><div class="stt">走紙 1 米測試（米尺）</div>
+              <div class="sts">每「機＋紙」一次 · 可隨時重印米尺驗證</div><span class="badge b-stored">已建檔 +0.3mm</span></div></div>
+            <div class="step done"><div class="num">✓</div><div><div class="stt">選測量設備</div>
+              <div class="sts">X-Rite i1Pro3</div><span class="badge b-fresh">已連線</span></div></div>
+            <div class="step cur"><div class="num">5</div><div><div class="stt">校準集 · 5 種列印方式</div>
+              <div class="sts">自動：噴頭→模量→線性化→G7→ICC</div><span class="badge b-todo">自動執行中</span></div></div>
+            <div class="step"><div class="num">6</div><div><div class="stt">存為標準</div>
+              <div class="sts">寫入紙張狀態庫 → READY · 自動校驗就緒</div></div></div>
+          </div>
+
+          <div class="calmain">
+            <span class="backbtn" data-go2="cal">← 返回配置庫</span>
+            <h2>步驟 5 · 校準集 · 5 種列印方式（自動執行）</h2>
+            <p class="lead">機 / 紙 / 儀器選好後，系統自動替每一種列印方式跑完整校準
+               （噴頭 → 模量 → 線性化 → G7 → ICC），全程免手動。完成後存為標準，日後可一鍵「自動校驗」。</p>
+
+            <div class="panel">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="font-size:14px;font-weight:700">自動校準進度 · 5 種列印方式</div>
+                <span class="tag b-fresh">i1Pro3 自動量測中</span>
+              </div>
+              <div class="kv"><span class="k">單黑 · WF1 <span style="color:var(--sub);font-weight:400">· 線性化 SCTV</span></span><span class="v" style="color:var(--ok)">✓ 完成</span></div>
+              <div class="kv"><span class="k">黑+淺灰 · WF2 <span style="color:var(--sub);font-weight:400">· 線性化 SCTV</span></span><span class="v" style="color:var(--ok)">✓ 完成</span></div>
+              <div class="kv"><span class="k">黑+淺灰+四色 · WF3 <span style="color:var(--sub);font-weight:400">· 中性 SCTV ＋ G7</span></span><span class="v" style="color:var(--accent-deep)">⟳ 線性化中…</span></div>
+              <div class="kv"><span class="k">RGB · WF4 <span style="color:var(--sub);font-weight:400">· G7＋ICC</span></span><span class="v" style="color:var(--sub)">待執行</span></div>
+              <div class="kv"><span class="k">16-bit RGB · WF6 <span style="color:var(--sub);font-weight:400">· G7＋ICC</span></span><span class="v" style="color:var(--sub)">待執行</span></div>
+              <div class="infoline">ⓘ 線性化方法：中性(WF1/2/3) 走 <b>SCTV (ISO 20654)</b>；<b>密度只用於墨量上限</b>；彩色靠 G7＋ICC。走紙已於步驟 3 建檔，本輪不重測。</div>
+              <div class="calbtns">
+                <button class="btn ghost">暫停</button>
+                <button class="btn primary">全部完成 → 存為標準</button>
+              </div>
+            </div>
+
+            <div class="legend">
+              <span><span class="dot d-ok" style="width:9px;height:9px;border-radius:50%"></span> 已建檔／有效（綠）</span>
+              <span><span class="dot d-warn" style="width:9px;height:9px;border-radius:50%"></span> 過期需重校（黃·軟提醒）</span>
+              <span><span class="dot d-bad" style="width:9px;height:9px;border-radius:50%"></span> 未建檔禁止列印（紅·硬擋）</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.nav[data-go]').forEach(n=>{
+    n.onclick=()=>{
+      document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));
+      n.classList.add('active');
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('show'));
+      document.getElementById('page-'+n.dataset.go).classList.add('show');
+    };
+  });
+  document.querySelectorAll('.card').forEach(c=>{
+    c.onclick=()=>{document.querySelectorAll('.card').forEach(x=>x.classList.remove('sel'));c.classList.add('sel');};
+  });
+  // slim segmented mode selector
+  document.querySelectorAll('.seg-modes .sm').forEach(s=>{
+    s.onclick=()=>{document.querySelectorAll('.seg-modes .sm').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');};
+  });
+  // accordion inspector — only one section open at a time
+  document.querySelectorAll('.sect.acc>h4').forEach(h=>{
+    h.onclick=()=>{
+      const sec=h.parentElement, wasOpen=sec.classList.contains('open');
+      document.querySelectorAll('.sect.acc').forEach(x=>x.classList.remove('open'));
+      if(!wasOpen) sec.classList.add('open');
+    };
+  });
+  // preview toggles
+  document.querySelectorAll('.ptools .tog').forEach(t=>{
+    t.onclick=()=>{t.classList.toggle('on');t.querySelector('.box').textContent=t.classList.contains('on')?'✓':'';};
+  });
+  // intra-section navigation (library <-> new-calibration stepper)
+  document.querySelectorAll('[data-go2]').forEach(b=>{
+    b.addEventListener('click',e=>{
+      e.stopPropagation();
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('show'));
+      document.getElementById('page-'+b.dataset.go2).classList.add('show');
+      const calNav=document.querySelector('.nav[data-go=cal]');
+      document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));
+      calNav.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
