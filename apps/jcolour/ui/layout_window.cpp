@@ -5,6 +5,8 @@
 #include "../paper_state.h"
 #include "../queue.h"
 #include "../nesting.h"
+#include "../step_repeat.h"
+#include "../contact_sheet.h"
 #include "state_machine.h"
 
 #include <QInputDialog>
@@ -327,6 +329,35 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
     QFont uf = g.font(); uf.setPointSizeF(7.5); g.setFont(uf);
     g.drawText(ut, Qt::AlignCenter, QStringLiteral("利用率 81%"));
 
+    // 50mm 网格（纸内，随缩放）
+    if (showGrid_) {
+        g.setPen(QPen(QColor(0, 120, 200, 46), 1));
+        for (int mm = 50; mm < int(kPaperW); mm += 50)
+            g.drawLine(QPointF(p.x() + mm * s, p.y()), QPointF(p.x() + mm * s, p.bottom()));
+        for (int mm = 50; mm < int(kPaperH); mm += 50)
+            g.drawLine(QPointF(p.x(), p.y() + mm * s), QPointF(p.right(), p.y() + mm * s));
+    }
+
+    // 裁切角线（每块四角，打印后裁纸用）
+    if (showCropMarks_) {
+        g.setPen(QPen(QColor("#23262b"), 1));
+        const double L = 4.0 * s, gap = 1.2 * s;   // 4mm 线 · 1.2mm 离空
+        for (const auto& b : blocks_) {
+            if (b.isText) continue;
+            const QRectF r = blockRectPx(b);
+            const auto mark = [&](QPointF c, int dx, int dy) {
+                g.drawLine(QPointF(c.x() + dx * gap, c.y()),
+                           QPointF(c.x() + dx * (gap + L), c.y()));
+                g.drawLine(QPointF(c.x(), c.y() + dy * gap),
+                           QPointF(c.x(), c.y() + dy * (gap + L)));
+            };
+            mark(r.topLeft(), -1, -1);
+            mark(r.topRight(), +1, -1);
+            mark(r.bottomLeft(), -1, +1);
+            mark(r.bottomRight(), +1, +1);
+        }
+    }
+
     // rulers (mm ticks aligned to the paper origin, follow zoom/scroll)
     if (!showRulers_) return;
     g.setPen(Qt::NoPen);
@@ -489,6 +520,51 @@ void LayoutCanvas::wheelEvent(QWheelEvent* e) {
 }
 
 void LayoutCanvas::resizeEvent(QResizeEvent*) { clampScroll(); }
+
+void LayoutCanvas::duplicateSelected() {
+    if (sel_ < 0 || sel_ >= blocks_.size()) return;
+    CanvasBlock b = blocks_[sel_];
+    b.x = qMin(b.x + 12.0, kPaperW - b.w);   // 错位 12mm，不越纸
+    b.y = qMin(b.y + 12.0, kPaperH - b.h);
+    blocks_.push_back(b);
+    sel_ = blocks_.size() - 1;
+    update();
+    emit blockAdded(sel_);
+    emit selectionChanged(sel_);
+}
+
+void LayoutCanvas::rotateSelected90() {
+    if (sel_ < 0 || sel_ >= blocks_.size()) return;
+    auto& b = blocks_[sel_];
+    std::swap(b.w, b.h);
+    b.x = qBound(0.0, b.x, kPaperW - b.w);   // 旋转后拉回纸内
+    b.y = qBound(0.0, b.y, kPaperH - b.h);
+    update();
+    emit blockMoved(sel_);
+}
+
+void LayoutCanvas::deleteSelected() {
+    if (sel_ < 0 || sel_ >= blocks_.size()) return;
+    blocks_.remove(sel_);
+    sel_ = -1;
+    update();
+    emit selectionChanged(-1);
+}
+
+void LayoutCanvas::alignSelected(Align a) {
+    if (sel_ < 0 || sel_ >= blocks_.size()) return;
+    auto& b = blocks_[sel_];
+    switch (a) {
+        case Align::Left:    b.x = 0; break;
+        case Align::HCenter: b.x = (kPaperW - b.w) / 2; break;
+        case Align::Right:   b.x = kPaperW - b.w; break;
+        case Align::Top:     b.y = 0; break;
+        case Align::VCenter: b.y = (kPaperH - b.h) / 2; break;
+        case Align::Bottom:  b.y = kPaperH - b.h; break;
+    }
+    update();
+    emit blockMoved(sel_);
+}
 
 bool LayoutCanvas::event(QEvent* e) {
     // macOS 触控板捏合缩放；标尺/纸张同一 paint 通道，天然跟随
@@ -849,48 +925,81 @@ QWidget* LayoutWindow::buildToolbox() {
     auto* v = new QVBoxLayout(box);
     v->setContentsMargins(4, 6, 4, 6);
     v->setSpacing(2);
-    // action=true 的是瞬时动作（放大/缩小等），不参与工具互斥选中
-    struct T { const char* g; const char* tip; bool action; };
-    const T tools[] = {
-        {"➤", "选择 / 移动", false}, {"A", "文字", false}, {"▦", "二维码 / 条码", false},
-        {"⊕", "放大 (Cmd+滚轮↑ / Cmd+=)", true}, {"⊖", "缩小 (Cmd+滚轮↓ / Cmd+-)", true},
-        {"⤢", "缩放适配窗口", true},
-        {"⊡", "裁切", false}, {"⟳", "旋转 / 镜像", false}, {"▤", "拼贴 Tiling", false},
-        {"▥", "自动拼版 / 嵌套", true}, {"#", "网格 / 参考线", false}, {"⟙", "标尺显示/隐藏", true},
+    // 工具栏分组对标 Mirage / ImagePrint / Caldera 排版编辑器：
+    //   工具（互斥）→ 块操作 → 拼版 → 显示开关 → 视图缩放
+    const auto sep = [&v] {
+        auto* s = new QFrame;
+        s->setFixedSize(18, 1);
+        s->setStyleSheet("background:#d2d5d9;border:none;");
+        v->addSpacing(3);
+        v->addWidget(s, 0, Qt::AlignHCenter);
+        v->addSpacing(3);
     };
-    bool first = true;
-    for (const auto& t : tools) {
-        auto* b = glyphBtn(QString::fromUtf8(t.g), QString::fromUtf8(t.tip));
+    const auto add = [&](const char* glyph, const QString& tip, bool exclusiveTool,
+                         std::function<void()> fn) {
+        auto* b = glyphBtn(QString::fromUtf8(glyph), tip);
         b->setFixedSize(26, 26);
-        const QString tip = QString::fromUtf8(t.tip);
-        if (!t.action) {
-            b->setCheckable(true);
-            b->setAutoExclusive(true);
-        }
-        if (first) { b->setChecked(true); selectToolBtn_ = b; first = false; }
-        if (tip == QStringLiteral("选择 / 移动"))
-            connect(b, &QToolButton::clicked, this,
-                    [this] { canvas_->setTool(CanvasTool::Select); });
-        else if (tip == QStringLiteral("文字"))
-            connect(b, &QToolButton::clicked, this,
-                    [this] { canvas_->setTool(CanvasTool::Text);
-                             statusBar()->showMessage(QStringLiteral("文字工具：在纸张上点击放置文字"), 4000); });
-        else if (tip == QStringLiteral("二维码 / 条码"))
-            connect(b, &QToolButton::clicked, this,
-                    [this] { canvas_->setTool(CanvasTool::Qr);
-                             statusBar()->showMessage(QStringLiteral("二维码工具：在纸张上点击放置二维码"), 4000); });
-        else if (tip == QStringLiteral("自动拼版 / 嵌套"))
-            connect(b, &QToolButton::clicked, this, [this] { runAutoNest(); });
-        else if (tip.startsWith(QStringLiteral("放大")))
-            connect(b, &QToolButton::clicked, this, [this] { canvas_->zoomBy(+10); });
-        else if (tip.startsWith(QStringLiteral("缩小")))
-            connect(b, &QToolButton::clicked, this, [this] { canvas_->zoomBy(-10); });
-        else if (tip == QStringLiteral("缩放适配窗口"))
-            connect(b, &QToolButton::clicked, this, [this] { canvas_->zoomFit(); });
-        else if (tip == QStringLiteral("标尺显示/隐藏"))
-            connect(b, &QToolButton::clicked, this, [this] { canvas_->toggleRulers(); });
+        if (exclusiveTool) { b->setCheckable(true); b->setAutoExclusive(true); }
+        if (fn) connect(b, &QToolButton::clicked, this, std::move(fn));
         v->addWidget(b);
+        return b;
+    };
+
+    // ── 工具（互斥选中）──
+    selectToolBtn_ = add("➤", QStringLiteral("选择 / 移动"), true,
+        [this] { canvas_->setTool(CanvasTool::Select); });
+    selectToolBtn_->setChecked(true);
+    add("A", QStringLiteral("文字"), true, [this] {
+        canvas_->setTool(CanvasTool::Text);
+        statusBar()->showMessage(QStringLiteral("文字工具：在纸张上点击放置文字"), 4000); });
+    add("▦", QStringLiteral("二维码 / 条码"), true, [this] {
+        canvas_->setTool(CanvasTool::Qr);
+        statusBar()->showMessage(QStringLiteral("二维码工具：在纸张上点击放置二维码"), 4000); });
+
+    // ── 块操作 ──
+    sep();
+    add("⧉", QStringLiteral("复制选中块 (+12mm 错位)"), false, [this] { canvas_->duplicateSelected(); });
+    add("⟳", QStringLiteral("旋转 90°（省纸拼版常用）"), false, [this] { canvas_->rotateSelected90(); });
+    add("⌫", QStringLiteral("删除选中块"), false, [this] { canvas_->deleteSelected(); });
+    {
+        auto* b = add("≡", QStringLiteral("对齐（相对纸张）"), false, nullptr);
+        auto* menu = new QMenu(b);
+        using A = LayoutCanvas::Align;
+        const std::pair<QString, A> items[] = {
+            {QStringLiteral("左对齐"), A::Left},   {QStringLiteral("水平居中"), A::HCenter},
+            {QStringLiteral("右对齐"), A::Right},  {QStringLiteral("顶对齐"), A::Top},
+            {QStringLiteral("垂直居中"), A::VCenter}, {QStringLiteral("底对齐"), A::Bottom},
+        };
+        for (const auto& [txt, mode] : items)
+            menu->addAction(txt, this, [this, mode] { canvas_->alignSelected(mode); });
+        b->setMenu(menu);
+        b->setPopupMode(QToolButton::InstantPopup);
     }
+
+    // ── 拼版 ──
+    sep();
+    add("▥", QStringLiteral("自动拼版 / 嵌套"), false, [this] { runAutoNest(); });
+    add("⊞", QStringLiteral("步进重复 Step && Repeat…"), false, [this] {
+        auto* dlg = new StepRepeatDialog(this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show(); });
+    add("▤", QStringLiteral("联系表 Contact Sheet…"), false, [this] {
+        auto* w = new ContactSheetDialog(nullptr);
+        w->setAttribute(Qt::WA_DeleteOnClose);
+        w->setWindowTitle(QStringLiteral("联系表"));
+        w->show(); });
+
+    // ── 显示开关 ──
+    sep();
+    add("✂", QStringLiteral("裁切角线 开/关（裁纸标记）"), false, [this] { canvas_->toggleCropMarks(); });
+    add("#", QStringLiteral("50mm 网格 开/关"), false, [this] { canvas_->toggleGrid(); });
+    add("⟙", QStringLiteral("标尺 开/关"), false, [this] { canvas_->toggleRulers(); });
+
+    // ── 视图缩放 ──
+    sep();
+    add("⊕", QStringLiteral("放大 (Cmd+滚轮↑ / Cmd+=)"), false, [this] { canvas_->zoomBy(+10); });
+    add("⊖", QStringLiteral("缩小 (Cmd+滚轮↓ / Cmd+-)"), false, [this] { canvas_->zoomBy(-10); });
+    add("⤢", QStringLiteral("缩放适配窗口"), false, [this] { canvas_->zoomFit(); });
     v->addStretch();
     // insert tool done (or cancelled) → revert to 选择
     connect(canvas_, &LayoutCanvas::toolFinished, this, [this] {
@@ -1461,6 +1570,8 @@ void LayoutWindow::selectTabForShot(int tab) {
 void LayoutWindow::runActionForShot(const QString& action) {
     if (action.startsWith(QLatin1String("zoom:")))   // zoom:+30 / zoom:-40（复现缩放问题用）
         canvas_->zoomBy(action.mid(5).toInt());
+    else if (action == QLatin1String("marks")) canvas_->toggleCropMarks();
+    else if (action == QLatin1String("grid"))  canvas_->toggleGrid();
     else if (action == QLatin1String("submit")) submitLayoutToQueue();
     else if (action == QLatin1String("nest")) runAutoNest();
     else if (action == QLatin1String("settings")) {

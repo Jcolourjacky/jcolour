@@ -61,7 +61,16 @@ public:
     void zoomBy(int deltaPercent);   // ±10 …
     void zoomFit();
     int  zoomPercent() const;        // 100 == paper at 80% of viewport width
-    void toggleRulers() { showRulers_ = !showRulers_; update(); }
+    void toggleRulers()    { showRulers_ = !showRulers_; update(); }
+    void toggleGrid()      { showGrid_ = !showGrid_; update(); }
+    void toggleCropMarks() { showCropMarks_ = !showCropMarks_; update(); }
+
+    // 选中块操作（拼版编辑器标配：复制 / 旋转 / 删除 / 对齐）
+    void duplicateSelected();
+    void rotateSelected90();
+    void deleteSelected();
+    enum class Align { Left, HCenter, Right, Top, VCenter, Bottom };
+    void alignSelected(Align a);   // 相对纸张对齐
 
 signals:
     void selectionChanged(int idx);  // -1 = none
@@ -91,6 +100,8 @@ private:
     CanvasTool tool_ = CanvasTool::Select;
     double zoom_  = 0.0;     // paper width as fraction of viewport width; 0 = fit on first paint
     bool   showRulers_ = true;
+    bool   showGrid_ = false;
+    bool   showCropMarks_ = false;
     double scroll_ = 0.0;    // px
     bool   dragging_ = false;
     int    resizing_ = -1;   // active handle index, -1 = not resizing
