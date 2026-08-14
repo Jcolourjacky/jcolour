@@ -2,6 +2,7 @@
 #include "print_env_manager.h"
 #include "page_measurement_devices.h"
 #include "icons.h"
+#include "spot_tuner_dialog.h"
 #include "../paper_state.h"
 #include "../queue.h"
 #include "../nesting.h"
@@ -1282,6 +1283,19 @@ void LayoutWindow::buildMenus() {
                        [this] { runAutoNest(); });
     QMenu* colour = mb->addMenu(QStringLiteral("色彩"));
     colour->addAction(QStringLiteral("打印环境 / 校准…"), [this] { openEnvManager(); });
+    colour->addAction(QStringLiteral("专色手工调整（蜂巢）…"), [this] {
+        auto* dlg = new VisualSpotTunerDialog(this);
+        connect(dlg, &VisualSpotTunerDialog::recipeAccepted, this,
+                [this](const QString& name, const jcolour::ui::SpotRecipe& r) {
+            statusBar()->showMessage(
+                QStringLiteral("专色「%1」已采用：C%2 M%3 Y%4 K%5")
+                    .arg(name)
+                    .arg(r.c, 0, 'f', 1).arg(r.m, 0, 'f', 1)
+                    .arg(r.y, 0, 'f', 1).arg(r.k, 0, 'f', 1), 8000);
+        });
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show();
+    });
     QMenu* tools = mb->addMenu(QStringLiteral("工具"));
     tools->addAction(QStringLiteral("米尺走纸校正…"), [this] { openEnvManager(); });
     tools->addAction(QStringLiteral("检查线性…"), [this] { openEnvManager(); });
@@ -2288,6 +2302,10 @@ void LayoutWindow::runActionForShot(const QString& action) {
     }
     else if (action == QLatin1String("origin"))     // 演示零位偏移（截图验证）
         canvas_->setRulerOrigin(150, 100);
+    else if (action == QLatin1String("spottuner")) {
+        auto* dlg = new VisualSpotTunerDialog(this);
+        dlg->show();
+    }
     else if (action == QLatin1String("submit")) submitLayoutToQueue();
     else if (action == QLatin1String("nest")) runAutoNest();
     else if (action == QLatin1String("settings")) {
