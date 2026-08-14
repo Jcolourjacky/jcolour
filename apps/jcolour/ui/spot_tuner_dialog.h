@@ -18,6 +18,7 @@ class QCheckBox;
 class QDoubleSpinBox;
 class QLineEdit;
 class QLabel;
+class QTableWidget;
 
 namespace jcolour::ui {
 
@@ -38,6 +39,7 @@ public:
 
     void setSpotName(const QString& name);
     void setCenterRecipe(const SpotRecipe& r);
+    void setTargetLab(double L, double a, double b);
     SpotRecipe selectedRecipe() const;
 
 signals:
@@ -50,9 +52,18 @@ private:
     void recenterOnSelection();        // 设为中心（迭代细调）
     void saveToLibrary();
     void printChart();
+    void measureSelected();            // i1 实测选中块 → 真 Lab + ΔE00
+    void updateDeltaE();
 
     QLineEdit*  nameEdit_ = nullptr;
     QLabel*     labL_ = nullptr; QLabel* labA_ = nullptr; QLabel* labB_ = nullptr;
+    QDoubleSpinBox* tgtL_ = nullptr; QDoubleSpinBox* tgtA_ = nullptr;
+    QDoubleSpinBox* tgtB_ = nullptr;
+    QLabel*     deltaE_ = nullptr;
+    QLabel*     measSrc_ = nullptr;    // 读数来源徽标：屏幕近似 / i1 实测 / 模拟
+    // 选中块的实测 Lab（有则优先于屏幕近似）
+    bool   hasMeasured_ = false;
+    double measL_ = 0, measA_ = 0, measB_ = 0;
     QDoubleSpinBox* devC_ = nullptr; QDoubleSpinBox* devM_ = nullptr;
     QDoubleSpinBox* devY_ = nullptr; QDoubleSpinBox* devK_ = nullptr;
     QVector<QComboBox*> dirChannel_;   // 6 个方向的通道选择
@@ -63,6 +74,21 @@ private:
     QCheckBox* showClipped_ = nullptr;
     QCheckBox* outlines_ = nullptr;
     SpotHexChart* chart_ = nullptr;
+};
+
+/// 专色库：蜂巢调好的配方在这里管理 —— 列表（名称/CMYK/Lab/来源/日期）、
+/// 「调整…」以库中配方为中心重开蜂巢、删除。
+class SpotLibraryDialog : public QDialog {
+    Q_OBJECT
+public:
+    explicit SpotLibraryDialog(QWidget* parent = nullptr);
+
+private:
+    void reload();
+    void tuneSelected();
+    void removeSelected();
+
+    QTableWidget* table_ = nullptr;
 };
 
 }  // namespace jcolour::ui

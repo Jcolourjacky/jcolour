@@ -1,5 +1,8 @@
 #include "spot_tuner_dialog.h"
 
+#include "../../../engine/src/i1pro3_driver.h"
+#include "../../../engine/src/spectral.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -17,7 +20,13 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QVBoxLayout>
+#include <QPointer>
+#include <QDateTime>
+#include <QHeaderView>
+#include <QTableWidget>
+#include <QRandomGenerator>
 #include <cmath>
+#include <thread>
 
 namespace jcolour::ui {
 
@@ -64,6 +73,43 @@ SpotRecipe operator+(SpotRecipe a, const SpotRecipe& b) {
 }
 SpotRecipe operator*(SpotRecipe a, double s) {
     a.c *= s; a.m *= s; a.y *= s; a.k *= s; return a;
+}
+
+// 完整 CIEDE2000（专色判定的行业标准差值）
+double deltaE2000(double L1, double a1, double b1, double L2, double a2, double b2) {
+    const double rad = M_PI / 180, deg = 180 / M_PI;
+    const double C1 = std::hypot(a1, b1), C2 = std::hypot(a2, b2), Cb = (C1 + C2) / 2;
+    const double G = 0.5 * (1 - std::sqrt(std::pow(Cb, 7) / (std::pow(Cb, 7) + std::pow(25.0, 7))));
+    const double ap1 = a1 * (1 + G), ap2 = a2 * (1 + G);
+    const double Cp1 = std::hypot(ap1, b1), Cp2 = std::hypot(ap2, b2);
+    auto hp = [&](double a, double b) {
+        if (a == 0 && b == 0) return 0.0;
+        double h = std::atan2(b, a) * deg;
+        return h < 0 ? h + 360 : h;
+    };
+    const double hp1 = hp(ap1, b1), hp2 = hp(ap2, b2);
+    const double dL = L2 - L1, dC = Cp2 - Cp1;
+    double dh = hp2 - hp1;
+    if (Cp1 * Cp2 == 0) dh = 0;
+    else if (dh > 180) dh -= 360;
+    else if (dh < -180) dh += 360;
+    const double dH = 2 * std::sqrt(Cp1 * Cp2) * std::sin(dh / 2 * rad);
+    const double Lb = (L1 + L2) / 2, Cpb = (Cp1 + Cp2) / 2;
+    double hb = hp1 + hp2;
+    if (Cp1 * Cp2 != 0) {
+        if (std::abs(hp1 - hp2) > 180) hb += (hp1 + hp2 < 360) ? 360 : -360;
+        hb /= 2;
+    }
+    const double T = 1 - 0.17 * std::cos((hb - 30) * rad) + 0.24 * std::cos(2 * hb * rad)
+                   + 0.32 * std::cos((3 * hb + 6) * rad) - 0.20 * std::cos((4 * hb - 63) * rad);
+    const double SL = 1 + 0.015 * std::pow(Lb - 50, 2) / std::sqrt(20 + std::pow(Lb - 50, 2));
+    const double SC = 1 + 0.045 * Cpb;
+    const double SH = 1 + 0.015 * Cpb * T;
+    const double dTheta = 30 * std::exp(-std::pow((hb - 275) / 25, 2));
+    const double RC = 2 * std::sqrt(std::pow(Cpb, 7) / (std::pow(Cpb, 7) + std::pow(25.0, 7)));
+    const double RT = -RC * std::sin(2 * dTheta * rad);
+    return std::sqrt(std::pow(dL / SL, 2) + std::pow(dC / SC, 2) + std::pow(dH / SH, 2)
+                   + RT * (dC / SC) * (dH / SH));
 }
 
 }  // namespace
@@ -292,8 +338,28 @@ VisualSpotTunerDialog::VisualSpotTunerDialog(QWidget* parent) : QDialog(parent) 
     labRow->addWidget(new QLabel("L")); labRow->addWidget(labL_);
     labRow->addWidget(new QLabel("a")); labRow->addWidget(labA_);
     labRow->addWidget(new QLabel("b")); labRow->addWidget(labB_);
+    measSrc_ = new QLabel(QStringLiteral("屏幕近似"));
+    measSrc_->setStyleSheet("font-size:10px;color:#8A8779;");
+    labRow->addWidget(measSrc_);
     labRow->addStretch();
-    form->addRow(QStringLiteral("Lab（屏幕近似）"), labRow);
+    form->addRow(QStringLiteral("当前 Lab"), labRow);
+
+    // 目标 Lab（专色的参考值，ΔE00 以它为基准）
+    auto* tgtRow = new QHBoxLayout;
+    auto mkTgt = [](double lo, double hi, double v) {
+        auto* s = new QDoubleSpinBox;
+        s->setRange(lo, hi); s->setDecimals(1); s->setValue(v); s->setFixedWidth(70);
+        return s;
+    };
+    tgtL_ = mkTgt(0, 100, 71.0); tgtA_ = mkTgt(-128, 127, -12.0); tgtB_ = mkTgt(-128, 127, -30.0);
+    tgtRow->addWidget(new QLabel("L")); tgtRow->addWidget(tgtL_);
+    tgtRow->addWidget(new QLabel("a")); tgtRow->addWidget(tgtA_);
+    tgtRow->addWidget(new QLabel("b")); tgtRow->addWidget(tgtB_);
+    deltaE_ = new QLabel("ΔE00 —");
+    deltaE_->setStyleSheet("font-family:Menlo,monospace;font-weight:700;color:#100A36;");
+    tgtRow->addWidget(deltaE_);
+    tgtRow->addStretch();
+    form->addRow(QStringLiteral("目标 Lab"), tgtRow);
 
     auto* devRow = new QHBoxLayout;
     auto mkSpin = [] {
@@ -376,12 +442,17 @@ VisualSpotTunerDialog::VisualSpotTunerDialog(QWidget* parent) : QDialog(parent) 
     auto* btns = new QHBoxLayout;
     auto* recenter = new QPushButton(QStringLiteral("设为中心"));
     recenter->setToolTip(QStringLiteral("以选中色块为新中心，围绕它继续细调（迭代逼近）"));
+    auto* measure = new QPushButton(QStringLiteral("实测选中块 (i1)"));
+    measure->setToolTip(QStringLiteral(
+        "把 i1 对准打印蜂巢图上对应标号的色块按测量键：真实 Lab 回填并算 ΔE00。\n"
+        "无仪器时用模拟读数演示流程。"));
     auto* save = new QPushButton(QStringLiteral("保存"));
     auto* print = new QPushButton(QStringLiteral("打印"));
     auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     bb->button(QDialogButtonBox::Ok)->setText(QStringLiteral("确定"));
     bb->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
     btns->addWidget(recenter);
+    btns->addWidget(measure);
     btns->addStretch();
     btns->addWidget(save);
     btns->addWidget(print);
@@ -401,6 +472,9 @@ VisualSpotTunerDialog::VisualSpotTunerDialog(QWidget* parent) : QDialog(parent) 
         connect(s, &QDoubleSpinBox::valueChanged, this, [this] { rebuildChart(); });
     connect(chart_, &SpotHexChart::patchClicked, this, &VisualSpotTunerDialog::onPatchSelected);
     connect(recenter, &QPushButton::clicked, this, &VisualSpotTunerDialog::recenterOnSelection);
+    connect(measure, &QPushButton::clicked, this, &VisualSpotTunerDialog::measureSelected);
+    for (auto* s : {tgtL_, tgtA_, tgtB_})
+        connect(s, &QDoubleSpinBox::valueChanged, this, [this] { updateDeltaE(); });
     connect(save, &QPushButton::clicked, this, &VisualSpotTunerDialog::saveToLibrary);
     connect(print, &QPushButton::clicked, this, &VisualSpotTunerDialog::printChart);
     connect(bb, &QDialogButtonBox::accepted, this, [this] {
@@ -474,12 +548,79 @@ void VisualSpotTunerDialog::rebuildChart() {
 
 void VisualSpotTunerDialog::onPatchSelected(int index) {
     if (index < 0 || index >= chart_->patches.size()) return;
+    hasMeasured_ = false;                       // 换块 → 旧实测作废
+    measSrc_->setText(QStringLiteral("屏幕近似"));
     const SpotRecipe& r = chart_->patches[index].recipe;
     double L, a, b;
     previewLab(r, L, a, b);
     labL_->setText(QString::number(L, 'f', 1));
     labA_->setText(QString::number(a, 'f', 1));
     labB_->setText(QString::number(b, 'f', 1));
+    updateDeltaE();
+}
+
+void VisualSpotTunerDialog::updateDeltaE() {
+    double L, a, b;
+    if (hasMeasured_) {
+        L = measL_; a = measA_; b = measB_;
+    } else {
+        previewLab(selectedRecipe(), L, a, b);
+    }
+    const double dE = deltaE2000(tgtL_->value(), tgtA_->value(), tgtB_->value(), L, a, b);
+    deltaE_->setText(QStringLiteral("ΔE00 %1").arg(dE, 0, 'f', 2));
+    // 专色验收惯例：≤1 视为达标（绿），≤3 可接受（黄），否则红。
+    const char* col = dE <= 1.0 ? "#2F9E6B" : dE <= 3.0 ? "#B58900" : "#B5124A";
+    deltaE_->setStyleSheet(QStringLiteral(
+        "font-family:Menlo,monospace;font-weight:700;color:%1;").arg(col));
+}
+
+void VisualSpotTunerDialog::setTargetLab(double L, double a, double b) {
+    tgtL_->setValue(L); tgtA_->setValue(a); tgtB_->setValue(b);
+}
+
+void VisualSpotTunerDialog::measureSelected() {
+    // 真仪器优先：i1Pro3 SDK 单点（阻塞调用放 std::thread，Queued 回主线程）。
+    // 框架/设备不可用 → 模拟读数（屏幕近似 + 噪声），来源徽标如实标注。
+    measSrc_->setText(QStringLiteral("测量中…"));
+    QPointer<VisualSpotTunerDialog> self(this);
+    const SpotRecipe rec = selectedRecipe();
+    std::thread([self, rec] {
+        double L = 0, a = 0, b = 0;
+        bool real = false;
+        auto& d = jcolour::i1sdk::I1Pro3Driver::instance();
+        if (d.available() && (d.isOpen() || d.openFirst())) {
+            d.setOption("MeasurementMode", "ReflectanceSpot");
+            if (d.calibrate() && d.triggerMeasurement() && d.availableSamples() > 0) {
+                std::array<float, 36> spec{};
+                if (d.spectrum(spec, 0)) {
+                    jcolour::spectral::Spectrum s{};
+                    for (int i = 0; i < 36; ++i) s[size_t(i)] = double(spec[size_t(i)]);
+                    const auto lab = jcolour::spectral::xyz_to_lab(
+                        jcolour::spectral::spectrum_to_xyz(s));
+                    L = lab.L; a = lab.a; b = lab.b;
+                    real = true;
+                }
+            }
+        }
+        if (!real) {                           // 模拟：近似 Lab + 小噪声
+            previewLab(rec, L, a, b);
+            auto* rng = QRandomGenerator::global();
+            L += (rng->generateDouble() - 0.5) * 1.2;
+            a += (rng->generateDouble() - 0.5) * 1.2;
+            b += (rng->generateDouble() - 0.5) * 1.2;
+        }
+        QMetaObject::invokeMethod(self, [self, L, a, b, real] {
+            if (!self) return;
+            self->hasMeasured_ = true;
+            self->measL_ = L; self->measA_ = a; self->measB_ = b;
+            self->labL_->setText(QString::number(L, 'f', 1));
+            self->labA_->setText(QString::number(a, 'f', 1));
+            self->labB_->setText(QString::number(b, 'f', 1));
+            self->measSrc_->setText(real ? QStringLiteral("i1 实测")
+                                         : QStringLiteral("模拟读数"));
+            self->updateDeltaE();
+        }, Qt::QueuedConnection);
+    }).detach();
 }
 
 void VisualSpotTunerDialog::recenterOnSelection() {
@@ -488,6 +629,9 @@ void VisualSpotTunerDialog::recenterOnSelection() {
 
 void VisualSpotTunerDialog::saveToLibrary() {
     const SpotRecipe r = selectedRecipe();
+    double L, a, b;
+    if (hasMeasured_) { L = measL_; a = measA_; b = measB_; }
+    else previewLab(r, L, a, b);
     QSettings s;
     const int n = s.beginReadArray("spotColors");
     s.endArray();
@@ -495,8 +639,14 @@ void VisualSpotTunerDialog::saveToLibrary() {
     s.setArrayIndex(n);
     s.setValue("name", nameEdit_->text());
     s.setValue("c", r.c); s.setValue("m", r.m); s.setValue("y", r.y); s.setValue("k", r.k);
+    s.setValue("L", L); s.setValue("a", a); s.setValue("b", b);
+    s.setValue("measured", hasMeasured_);
+    s.setValue("targetL", tgtL_->value());
+    s.setValue("targetA", tgtA_->value());
+    s.setValue("targetB", tgtB_->value());
+    s.setValue("savedAt", QDateTime::currentDateTime().toString(Qt::ISODate));
     s.endArray();
-    labL_->setToolTip(QStringLiteral("已保存到专色库"));
+    measSrc_->setText(QStringLiteral("已存入专色库"));
 }
 
 void VisualSpotTunerDialog::printChart() {
@@ -525,6 +675,124 @@ void VisualSpotTunerDialog::printChart() {
             .arg(dirStep_[i]->currentText());
     g.drawText(QRectF(page.x(), page.y() + 64, page.width(), 40), Qt::AlignLeft, sub);
     chart_->render(g, page.adjusted(0, 120, 0, -20));
+}
+
+// ─── 专色库管理 ─────────────────────────────────────────────────────
+
+SpotLibraryDialog::SpotLibraryDialog(QWidget* parent) : QDialog(parent) {
+    setWindowTitle(QStringLiteral("专色库"));
+    resize(720, 420);
+    auto* v = new QVBoxLayout(this);
+
+    table_ = new QTableWidget;
+    table_->setColumnCount(6);
+    table_->setHorizontalHeaderLabels(
+        {QStringLiteral("名称"), QStringLiteral("色样"), QStringLiteral("设备色 CMYK"),
+         QStringLiteral("Lab"), QStringLiteral("来源"), QStringLiteral("保存时间")});
+    table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table_->setSelectionMode(QAbstractItemView::SingleSelection);
+    table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table_->verticalHeader()->setVisible(false);
+    table_->horizontalHeader()->setStretchLastSection(true);
+    v->addWidget(table_);
+
+    auto* btns = new QHBoxLayout;
+    auto* tune = new QPushButton(QStringLiteral("调整…"));
+    tune->setToolTip(QStringLiteral("以该配方为中心重开蜂巢细调"));
+    auto* del = new QPushButton(QStringLiteral("删除"));
+    auto* close = new QPushButton(QStringLiteral("关闭"));
+    btns->addWidget(tune);
+    btns->addWidget(del);
+    btns->addStretch();
+    btns->addWidget(close);
+    v->addLayout(btns);
+
+    connect(tune, &QPushButton::clicked, this, &SpotLibraryDialog::tuneSelected);
+    connect(del, &QPushButton::clicked, this, &SpotLibraryDialog::removeSelected);
+    connect(table_, &QTableWidget::doubleClicked, this, [this] { tuneSelected(); });
+    connect(close, &QPushButton::clicked, this, &QDialog::accept);
+    reload();
+}
+
+void SpotLibraryDialog::reload() {
+    QSettings s;
+    const int n = s.beginReadArray("spotColors");
+    table_->setRowCount(n);
+    for (int i = 0; i < n; ++i) {
+        s.setArrayIndex(i);
+        const SpotRecipe r{s.value("c").toDouble(), s.value("m").toDouble(),
+                           s.value("y").toDouble(), s.value("k").toDouble()};
+        table_->setItem(i, 0, new QTableWidgetItem(s.value("name").toString()));
+        auto* sw = new QTableWidgetItem;
+        sw->setBackground(previewColor(r));
+        table_->setItem(i, 1, sw);
+        table_->setItem(i, 2, new QTableWidgetItem(
+            QStringLiteral("%1 / %2 / %3 / %4")
+                .arg(r.c, 0, 'f', 1).arg(r.m, 0, 'f', 1)
+                .arg(r.y, 0, 'f', 1).arg(r.k, 0, 'f', 1)));
+        table_->setItem(i, 3, new QTableWidgetItem(
+            QStringLiteral("%1 %2 %3")
+                .arg(s.value("L").toDouble(), 0, 'f', 1)
+                .arg(s.value("a").toDouble(), 0, 'f', 1)
+                .arg(s.value("b").toDouble(), 0, 'f', 1)));
+        table_->setItem(i, 4, new QTableWidgetItem(
+            s.value("measured").toBool() ? QStringLiteral("i1 实测")
+                                         : QStringLiteral("屏幕近似")));
+        table_->setItem(i, 5, new QTableWidgetItem(
+            s.value("savedAt").toString().replace('T', ' ')));
+    }
+    s.endArray();
+    table_->resizeColumnsToContents();
+}
+
+void SpotLibraryDialog::tuneSelected() {
+    const int row = table_->currentRow();
+    if (row < 0) return;
+    QSettings s;
+    s.beginReadArray("spotColors");
+    s.setArrayIndex(row);
+    const SpotRecipe r{s.value("c").toDouble(), s.value("m").toDouble(),
+                       s.value("y").toDouble(), s.value("k").toDouble()};
+    const QString name = s.value("name").toString();
+    const double tL = s.value("targetL", 50.0).toDouble();
+    const double tA = s.value("targetA", 0.0).toDouble();
+    const double tB = s.value("targetB", 0.0).toDouble();
+    s.endArray();
+
+    auto* dlg = new VisualSpotTunerDialog(this);
+    dlg->setSpotName(name);
+    dlg->setCenterRecipe(r);
+    dlg->setTargetLab(tL, tA, tB);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dlg, &QDialog::finished, this, [this] { reload(); });
+    dlg->show();
+}
+
+void SpotLibraryDialog::removeSelected() {
+    const int row = table_->currentRow();
+    if (row < 0) return;
+    // QSettings 数组不支持删中间项：整读整写。
+    QSettings s;
+    struct Entry { QVariantMap kv; };
+    QVector<Entry> all;
+    const int n = s.beginReadArray("spotColors");
+    for (int i = 0; i < n; ++i) {
+        s.setArrayIndex(i);
+        if (i == row) continue;
+        Entry e;
+        for (const QString& key : s.childKeys()) e.kv[key] = s.value(key);
+        all.push_back(e);
+    }
+    s.endArray();
+    s.remove("spotColors");
+    s.beginWriteArray("spotColors");
+    for (int i = 0; i < all.size(); ++i) {
+        s.setArrayIndex(i);
+        for (auto it = all[i].kv.begin(); it != all[i].kv.end(); ++it)
+            s.setValue(it.key(), it.value());
+    }
+    s.endArray();
+    reload();
 }
 
 }  // namespace jcolour::ui

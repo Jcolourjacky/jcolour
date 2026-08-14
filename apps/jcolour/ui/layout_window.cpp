@@ -1296,6 +1296,11 @@ void LayoutWindow::buildMenus() {
         dlg->setAttribute(Qt::WA_DeleteOnClose);
         dlg->show();
     });
+    colour->addAction(QStringLiteral("专色库…"), [this] {
+        auto* dlg = new SpotLibraryDialog(this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show();
+    });
     QMenu* tools = mb->addMenu(QStringLiteral("工具"));
     tools->addAction(QStringLiteral("米尺走纸校正…"), [this] { openEnvManager(); });
     tools->addAction(QStringLiteral("检查线性…"), [this] { openEnvManager(); });
