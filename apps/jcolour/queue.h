@@ -49,6 +49,18 @@ public:
 
     void addJob(const jcolour::queue::PrintJob& job);
     void removeJob(const QString& jobId);
+    // 底部队列监控条（ErgoSoft PrintQueue 式）读取用的快照
+    QVector<jcolour::queue::PrintJob> pendingSnapshot() const {
+        QVector<jcolour::queue::PrintJob> v;
+        for (const auto& j : pendingJobs_) v.push_back(j);
+        return v;
+    }
+    QVector<jcolour::queue::PrintJob> completedSnapshot() const {
+        QVector<jcolour::queue::PrintJob> v;
+        for (const auto& j : completedJobs_) v.push_back(j);
+        return v;
+    }
+    bool processing() const { return isProcessing_; }
     void reorderJobs();
     void startProcessing();
     void pauseProcessing();

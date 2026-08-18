@@ -223,6 +223,8 @@ private:
     bool modeStale(const QString& key) const;
 
     LayoutCanvas*  canvas_      = nullptr;
+    QWidget*       rightPanelW_ = nullptr;   // 右侧停靠面板（可折叠，ErgoSoft docked panel）
+    class QueueMonitorStrip* queueMonitor_ = nullptr;   // 底部 RIP 队列监控条
     QStackedWidget* propStack_  = nullptr;     // 0 = object row, 1 = text row
     QTabWidget*    rightTabs_   = nullptr;
     PrintQueueWidget* queueWidget_ = nullptr;  // the real queue module, embedded

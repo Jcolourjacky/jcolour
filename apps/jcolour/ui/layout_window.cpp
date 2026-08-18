@@ -1214,6 +1214,125 @@ bool LayoutCanvas::event(QEvent* e) {
 // LayoutWindow
 // ============================================================================
 
+// ---- ErgoSoft 式底部 RIP 队列监控条 -----------------------------------------
+// 常驻一行（可折叠）：作业芯片流（名称+状态色点+状态），标题行给
+// 待处理/打印中/完成 汇总。数据从 PrintQueueWidget 快照拉取（800ms +
+// 队列信号触发刷新），与右侧「队列」页共用同一数据源。
+
+class QueueMonitorStrip : public QWidget {
+public:
+    explicit QueueMonitorStrip(PrintQueueWidget* queue, QWidget* parent = nullptr)
+        : QWidget(parent), queue_(queue) {
+        setStyleSheet("background:#F1EFE8;border-top:1px solid #DDD9CF;");
+        auto* v = new QVBoxLayout(this);
+        v->setContentsMargins(8, 2, 8, 4);
+        v->setSpacing(3);
+
+        auto* head = new QHBoxLayout;
+        toggle_ = new QToolButton;
+        toggle_->setText(QStringLiteral("▾"));
+        toggle_->setAutoRaise(true);
+        toggle_->setFixedSize(18, 16);
+        title_ = new QLabel(QStringLiteral("RIP 队列"));
+        title_->setStyleSheet("font-size:10.5px;font-weight:700;color:#100A36;");
+        summary_ = new QLabel;
+        summary_->setStyleSheet("font-size:10px;color:#7A776D;");
+        head->addWidget(toggle_);
+        head->addWidget(title_);
+        head->addWidget(summary_);
+        head->addStretch();
+        v->addLayout(head);
+
+        chipRow_ = new QWidget;
+        chipLay_ = new QHBoxLayout(chipRow_);
+        chipLay_->setContentsMargins(0, 0, 0, 0);
+        chipLay_->setSpacing(6);
+        chipLay_->addStretch();
+        v->addWidget(chipRow_);
+
+        QSettings s;
+        collapsed_ = s.value("ui/queueStripCollapsed", false).toBool();
+        applyCollapsed();
+        connect(toggle_, &QToolButton::clicked, this, [this] {
+            collapsed_ = !collapsed_;
+            QSettings().setValue("ui/queueStripCollapsed", collapsed_);
+            applyCollapsed();
+        });
+
+        auto* timer = new QTimer(this);
+        timer->setInterval(800);
+        connect(timer, &QTimer::timeout, this, [this] { refresh(); });
+        timer->start();
+        if (queue_) {
+            connect(queue_, &PrintQueueWidget::jobStarted,   this, [this](const QString&) { refresh(); });
+            connect(queue_, &PrintQueueWidget::jobCompleted, this, [this](const QString&) { refresh(); });
+            connect(queue_, &PrintQueueWidget::jobFailed,    this,
+                    [this](const QString&, const QString&) { refresh(); });
+        }
+        refresh();
+    }
+
+private:
+    void applyCollapsed() {
+        chipRow_->setVisible(!collapsed_);
+        toggle_->setText(collapsed_ ? QStringLiteral("▸") : QStringLiteral("▾"));
+    }
+
+    void refresh() {
+        if (!queue_) return;
+        const auto pending = queue_->pendingSnapshot();
+        const auto done    = queue_->completedSnapshot();
+        int failed = 0;
+        for (const auto& j : done) if (j.status == QLatin1String("failed")) ++failed;
+        summary_->setText(QStringLiteral("·  %1 待处理 · %2 完成%3%4")
+            .arg(pending.size()).arg(done.size() - failed)
+            .arg(failed ? QStringLiteral(" · %1 失败").arg(failed) : QString())
+            .arg(queue_->processing() ? QStringLiteral(" · 处理中…") : QString()));
+
+        // 重建芯片（数量小，直接重建）
+        while (chipLay_->count() > 1) {
+            auto* item = chipLay_->takeAt(0);
+            delete item->widget();
+            delete item;
+        }
+        auto addChip = [this](const jcolour::queue::PrintJob& j) {
+            const bool fail = j.status == QLatin1String("failed");
+            const bool doneS = j.status == QLatin1String("completed");
+            const bool printing = j.status == QLatin1String("printing");
+            const char* dot = fail ? "#E71655" : doneS ? "#2F9E6B"
+                             : printing ? "#0BBAEE" : "#C9C5B9";
+            auto* chip = new QLabel(QStringLiteral(
+                "<span style='color:%1'>●</span> %2")
+                .arg(QString::fromLatin1(dot),
+                     j.id.left(26).toHtmlEscaped()));
+            chip->setStyleSheet(QStringLiteral(
+                "font-size:9.5px;color:#4A4740;background:%1;border:1px solid #DDD9CF;"
+                "border-radius:4px;padding:2px 7px;")
+                .arg(printing ? QStringLiteral("#E7F7FD") : QStringLiteral("#FAFAF7")));
+            chip->setToolTip(j.presetName + "\n" + j.status);
+            chipLay_->insertWidget(chipLay_->count() - 1, chip);
+        };
+        int shown = 0;
+        for (const auto& j : pending)  { if (shown++ < 14) addChip(j); }
+        for (auto it = done.rbegin(); it != done.rend() && shown < 14; ++it, ++shown)
+            addChip(*it);
+        if (pending.isEmpty() && done.isEmpty()) {
+            auto* empty = new QLabel(QStringLiteral("空 —— 「打印整版」提交作业后在此监控"));
+            empty->setStyleSheet("font-size:9.5px;color:#8A8779;");
+            chipLay_->insertWidget(0, empty);
+        }
+    }
+
+    PrintQueueWidget* queue_ = nullptr;
+    QToolButton* toggle_ = nullptr;
+    QLabel* title_ = nullptr;
+    QLabel* summary_ = nullptr;
+    QWidget* chipRow_ = nullptr;
+    QHBoxLayout* chipLay_ = nullptr;
+    bool collapsed_ = false;
+};
+
+
 LayoutWindow::LayoutWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle(QStringLiteral("jcolour — exhibition_2026.jcp"));
     resize(1360, 880);
@@ -1264,11 +1383,15 @@ LayoutWindow::LayoutWindow(QWidget* parent) : QMainWindow(parent) {
     auto* canvasWrap = new QWidget;
     canvasWrap->setLayout(canvasCol);
     mid->addWidget(canvasWrap, 1);
-    mid->addWidget(buildRightPanel());
+    rightPanelW_ = buildRightPanel();
+    mid->addWidget(rightPanelW_);
 
     auto* midW = new QWidget;
     midW->setLayout(mid);
     col->addWidget(midW, 1);
+    // ErgoSoft 式：常驻 RIP 队列监控条（可折叠）位于胶片条上方
+    queueMonitor_ = new QueueMonitorStrip(queueWidget_);
+    col->addWidget(queueMonitor_);
     col->addWidget(buildJobStrip());
 
     setCentralWidget(central);
@@ -1307,6 +1430,8 @@ void LayoutWindow::buildMenus() {
     view->addAction(QStringLiteral("适合窗口"), QKeySequence(QStringLiteral("Ctrl+0")),
                     [this] { canvas_->zoomFit(); });
     view->addSeparator();
+    view->addAction(QStringLiteral("显示/隐藏右侧面板"), QKeySequence(QStringLiteral("Ctrl+Alt+R")),
+                    [this] { if (rightPanelW_) rightPanelW_->setVisible(!rightPanelW_->isVisible()); });
     view->addAction(QStringLiteral("显示/隐藏参考线"), QKeySequence(QStringLiteral("Ctrl+;")),
                     [this] { canvas_->toggleGuides(); });
     view->addAction(QStringLiteral("显示/隐藏标尺"), QKeySequence(QStringLiteral("Ctrl+R")),
