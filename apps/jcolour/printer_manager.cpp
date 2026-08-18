@@ -17,6 +17,9 @@
 #include <QSettings>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QPainter>
+#include <QDir>
+#include <QFile>
 
 namespace jcolour {
 
@@ -47,6 +50,54 @@ QString inkKeyToLabel(const QString& key) {
 }
 
 } // anon
+
+// 12 通道墨量条（PJL 双向状态；-1 = 未知通道不画）
+class InkLevelsBar : public QWidget {
+public:
+    explicit InkLevelsBar(QWidget* parent = nullptr) : QWidget(parent) {
+        setMinimumHeight(64);
+        setVisible(false);
+    }
+    void setLevels(const int levels[12]) {
+        for (int i = 0; i < 12; ++i) levels_[i] = levels[i];
+        setVisible(true);
+        update();
+    }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        // P9500 12 通道惯用顺序与代表色
+        static const struct { const char* n; const char* c; } ch[12] = {
+            {"PK", "#1a1a1a"}, {"MK", "#3a3a3a"}, {"C", "#0090d0"}, {"M", "#d0308c"},
+            {"Y", "#d8b800"}, {"LC", "#70c4e8"}, {"LM", "#e890c4"}, {"GY", "#8a8a8a"},
+            {"LGY", "#b8b8b8"}, {"V", "#7a4fa0"}, {"OR", "#e07820"}, {"GR", "#3e9e5b"},
+        };
+        QPainter g(this);
+        const double bw = width() / 12.0;
+        QFont f = g.font(); f.setPointSizeF(8); g.setFont(f);
+        for (int i = 0; i < 12; ++i) {
+            const QRectF cell(i * bw + 2, 0, bw - 4, height() - 14.0);
+            g.setPen(QPen(QColor("#DDD9CF"), 1));
+            g.setBrush(QColor("#F1EFE8"));
+            g.drawRect(cell);
+            if (levels_[i] >= 0) {
+                const double h = cell.height() * qBound(0, levels_[i], 100) / 100.0;
+                g.setPen(Qt::NoPen);
+                g.setBrush(QColor(ch[i].c));
+                g.drawRect(QRectF(cell.x(), cell.bottom() - h, cell.width(), h));
+                if (levels_[i] <= 10) {                 // 低墨警示
+                    g.setPen(QPen(QColor("#E71655"), 1.5));
+                    g.setBrush(Qt::NoBrush);
+                    g.drawRect(cell);
+                }
+            }
+            g.setPen(QColor("#7A776D"));
+            g.drawText(QRectF(i * bw, height() - 13.0, bw, 12), Qt::AlignCenter,
+                       QString::fromLatin1(ch[i].n));
+        }
+    }
+private:
+    int levels_[12] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+};
 
 PrinterManagerWidget::PrinterManagerWidget(QWidget* parent) : QWidget(parent) {
     auto* root = new QHBoxLayout(this);
@@ -84,9 +135,14 @@ PrinterManagerWidget::PrinterManagerWidget(QWidget* parent) : QWidget(parent) {
     nameEdit_   = new QLineEdit;
     modelCombo_ = new QComboBox; modelCombo_->addItems(kModels);
     serialEdit_ = new QLineEdit; serialEdit_->setPlaceholderText("X9PK004821");
-    connCombo_  = new QComboBox; connCombo_->addItems({"TCP/IP", "USB"});
+    // 端口类型（ErgoSoft 四种）：RAW 直连 / LPR / USB / 打印到文件
+    connCombo_  = new QComboBox;
+    connCombo_->addItems({QStringLiteral("TCP/IP (RAW 9100)"), QStringLiteral("LPR"),
+                          QStringLiteral("USB"), QStringLiteral("打印到文件")});
     hostEdit_   = new QLineEdit; hostEdit_->setPlaceholderText("192.168.0.100");
     portSpin_   = new QSpinBox;  portSpin_->setRange(1, 65535); portSpin_->setValue(9100);
+    queueEdit_  = new QLineEdit; queueEdit_->setPlaceholderText(QStringLiteral("PASSTHRU（LPR 队列名）"));
+    dirEdit_    = new QLineEdit; dirEdit_->setPlaceholderText(QStringLiteral("~/Prints（输出目录）"));
     inkCombo_   = new QComboBox; inkCombo_->addItems(kInkModes);
     dpiCombo_   = new QComboBox; dpiCombo_->addItems({"720", "1440", "2880"});
     defaultChk_ = new QCheckBox(TR("Set as default printer"));
@@ -97,6 +153,8 @@ PrinterManagerWidget::PrinterManagerWidget(QWidget* parent) : QWidget(parent) {
     form->addRow(TR("Connection"),          connCombo_);
     form->addRow(TR("Host / IP"),           hostEdit_);
     form->addRow(TR("Port"),                portSpin_);
+    form->addRow(QStringLiteral("LPR 队列"), queueEdit_);
+    form->addRow(QStringLiteral("输出目录"),  dirEdit_);
     form->addRow(TR("Default ink mode"),    inkCombo_);
     form->addRow(TR("Resolution (dpi)"),    dpiCombo_);
     form->addRow(QString(),                 defaultChk_);
@@ -104,7 +162,10 @@ PrinterManagerWidget::PrinterManagerWidget(QWidget* parent) : QWidget(parent) {
 
     auto* actionRow = new QHBoxLayout;
     testBtn_   = new QPushButton(TR("Test connection"));
+    statusBtn_ = new QPushButton(QStringLiteral("查询状态"));
+    statusBtn_->setToolTip(QStringLiteral("PJL 双向查询：就绪/介质/12 通道墨量（仅 RAW 直连）"));
     actionRow->addWidget(testBtn_);
+    actionRow->addWidget(statusBtn_);
     actionRow->addStretch();
     formCol->addLayout(actionRow);
 
@@ -112,6 +173,9 @@ PrinterManagerWidget::PrinterManagerWidget(QWidget* parent) : QWidget(parent) {
     statusLbl_->setStyleSheet("color:#666; padding:4px 0;");
     statusLbl_->setWordWrap(true);
     formCol->addWidget(statusLbl_);
+
+    inkBar_ = new InkLevelsBar;
+    formCol->addWidget(inkBar_);
 
     formCol->addStretch();
     root->addLayout(formCol, 1);
@@ -124,6 +188,15 @@ PrinterManagerWidget::PrinterManagerWidget(QWidget* parent) : QWidget(parent) {
     connect(removeBtn_,   &QPushButton::clicked, this, &PrinterManagerWidget::onRemove);
     connect(discoverBtn_, &QPushButton::clicked, this, &PrinterManagerWidget::onDiscover);
     connect(testBtn_,     &QPushButton::clicked, this, &PrinterManagerWidget::onTestConnection);
+    connect(statusBtn_,   &QPushButton::clicked, this, &PrinterManagerWidget::onQueryStatus);
+    // 端口类型切换 → 行显隐 + LPR/RAW 默认端口
+    connect(connCombo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
+        if (!blockFormSignals_) {
+            if (idx == 0 && portSpin_->value() == 515)  portSpin_->setValue(9100);
+            if (idx == 1 && portSpin_->value() == 9100) portSpin_->setValue(515);
+        }
+        updateConnRows();
+    });
     connect(defaultChk_,  &QCheckBox::toggled,   this, [this](bool on) {
         if (blockFormSignals_) return;
         if (currentIdx_ < 0) return;
@@ -202,6 +275,8 @@ void PrinterManagerWidget::loadFromSettings() {
         p.connection     = s.value("connection", "tcp").toString();
         p.host           = s.value("host").toString();
         p.port           = s.value("port", 9100).toInt();
+        p.lprQueue       = s.value("lprQueue").toString();
+        p.outputDir      = s.value("outputDir").toString();
         p.defaultInkMode = s.value("inkMode", "PhotoBlack").toString();
         p.defaultDpi     = s.value("dpi", 1440).toInt();
         p.isDefault      = s.value("isDefault", false).toBool();
@@ -222,6 +297,8 @@ void PrinterManagerWidget::saveToSettings() {
         s.setValue("connection", p.connection);
         s.setValue("host",       p.host);
         s.setValue("port",       p.port);
+        s.setValue("lprQueue",   p.lprQueue);
+        s.setValue("outputDir",  p.outputDir);
         s.setValue("inkMode",    p.defaultInkMode);
         s.setValue("dpi",        p.defaultDpi);
         s.setValue("isDefault",  p.isDefault);
@@ -267,18 +344,31 @@ void PrinterManagerWidget::writeCurrentIntoForm() {
     int mi = kModels.indexOf(p.model);
     modelCombo_->setCurrentIndex(mi >= 0 ? mi : 0);
     serialEdit_->setText(p.serial);
-    connCombo_->setCurrentIndex(p.connection == "usb" ? 1 : 0);
+    connCombo_->setCurrentIndex(p.connection == "lpr" ? 1
+                              : p.connection == "usb" ? 2
+                              : p.connection == "file" ? 3 : 0);
     hostEdit_->setText(p.host);
     portSpin_->setValue(p.port);
+    queueEdit_->setText(p.lprQueue);
+    dirEdit_->setText(p.outputDir);
     inkCombo_->setCurrentText(inkKeyToLabel(p.defaultInkMode));
     dpiCombo_->setCurrentText(QString::number(p.defaultDpi));
     defaultChk_->setChecked(p.isDefault);
-    hostEdit_->setEnabled(p.connection != "usb");
-    portSpin_->setEnabled(p.connection != "usb");
+    updateConnRows();
     statusLbl_->setText(p.serial.isEmpty()
         ? QString("%1 · %2").arg(p.model, p.connection.toUpper())
         : QString("%1 · SN %2 · %3").arg(p.model, p.serial, p.connection.toUpper()));
+    inkBar_->setVisible(false);
     blockFormSignals_ = false;
+}
+
+void PrinterManagerWidget::updateConnRows() {
+    const int idx = connCombo_->currentIndex();      // 0 raw · 1 lpr · 2 usb · 3 file
+    const bool net = idx == 0 || idx == 1;
+    hostEdit_->setEnabled(net);
+    portSpin_->setEnabled(net);
+    queueEdit_->setEnabled(idx == 1);
+    dirEdit_->setEnabled(idx == 3);
 }
 
 void PrinterManagerWidget::readFormIntoCurrent() {
@@ -288,9 +378,13 @@ void PrinterManagerWidget::readFormIntoCurrent() {
     if (p.name.isEmpty()) p.name = "Untitled printer";
     p.model          = modelCombo_->currentText();
     p.serial         = serialEdit_->text().trimmed();
-    p.connection     = connCombo_->currentIndex() == 1 ? "usb" : "tcp";
+    p.connection     = connCombo_->currentIndex() == 1 ? "lpr"
+                     : connCombo_->currentIndex() == 2 ? "usb"
+                     : connCombo_->currentIndex() == 3 ? "file" : "tcp";
     p.host           = hostEdit_->text().trimmed();
     p.port           = portSpin_->value();
+    p.lprQueue       = queueEdit_->text().trimmed();
+    p.outputDir      = dirEdit_->text().trimmed();
     p.defaultInkMode = inkLabelToKey(inkCombo_->currentText());
     p.defaultDpi     = dpiCombo_->currentText().toInt();
 }
@@ -373,8 +467,26 @@ void PrinterManagerWidget::onTestConnection() {
     if (currentIdx_ < 0) return;
     readFormIntoCurrent();
     const auto& p = printers_[currentIdx_];
+
+    // 打印到文件：测试 = 目录存在且可写
+    if (p.connection == "file") {
+        const QString dir = p.outputDir.isEmpty()
+            ? QString() : QDir(p.outputDir).absolutePath();
+        if (dir.isEmpty() || !QDir(dir).exists()) {
+            statusLbl_->setText(QStringLiteral("输出目录不存在：%1").arg(p.outputDir));
+            return;
+        }
+        QFile probe(dir + "/.jcolour-write-test");
+        const bool writable = probe.open(QIODevice::WriteOnly);
+        probe.remove();
+        statusLbl_->setText(writable
+            ? QStringLiteral("输出目录可写：%1").arg(dir)
+            : QStringLiteral("输出目录不可写：%1").arg(dir));
+        return;
+    }
+
     QString uri;
-    if (p.connection == "tcp") {
+    if (p.connection == "tcp" || p.connection == "lpr") {
         if (p.host.isEmpty()) {
             statusLbl_->setText(TR("Set a host/IP before testing."));
             return;
@@ -391,6 +503,14 @@ void PrinterManagerWidget::onTestConnection() {
         statusLbl_->setText(QString(TR("Connection failed: %1")).arg(uri));
         return;
     }
+    // LPR：仅验证端口可达（515 是 lpd 控制通道，不做 PJL 对话）
+    if (p.connection == "lpr") {
+        printer.disconnect();
+        statusLbl_->setText(QStringLiteral("LPR 端口可达：%1:%2 · 队列 %3（发送经系统 lpd）")
+            .arg(p.host).arg(p.port)
+            .arg(p.lprQueue.isEmpty() ? QStringLiteral("默认") : p.lprQueue));
+        return;
+    }
     auto st = printer.query_status();
     printer.disconnect();
     QString msg = QString(TR("Connected to %1.")).arg(uri);
@@ -398,6 +518,39 @@ void PrinterManagerWidget::onTestConnection() {
     if (!st.media_type.empty())
         msg += QString(" Media: %1.").arg(QString::fromStdString(st.media_type));
     statusLbl_->setText(msg);
+}
+
+void PrinterManagerWidget::onQueryStatus() {
+    // 双向状态（ErgoSoft PrintClient 的状态面板）：就绪/错误/介质/12 通道墨量。
+    // 仅 RAW 直连支持 PJL 查询；LPR/USB/文件按端口能力如实提示。
+    if (currentIdx_ < 0) return;
+    readFormIntoCurrent();
+    const auto& p = printers_[currentIdx_];
+    if (p.connection != "tcp") {
+        statusLbl_->setText(QStringLiteral("状态查询需 RAW 直连（PJL 双向）；当前端口类型为 %1。")
+                                .arg(connCombo_->currentText()));
+        return;
+    }
+    if (p.host.isEmpty()) { statusLbl_->setText(TR("Set a host/IP before testing.")); return; }
+    statusLbl_->setText(QStringLiteral("查询状态…"));
+    statusLbl_->repaint();
+    jcolour::pjl::EpsonPrinter printer(
+        QString("socket://%1:%2").arg(p.host).arg(p.port).toStdString());
+    if (!printer.connect()) {
+        statusLbl_->setText(QStringLiteral("无法连接 %1:%2").arg(p.host).arg(p.port));
+        return;
+    }
+    auto st = printer.query_status();
+    printer.disconnect();
+    QString msg = st.is_ready ? QStringLiteral("● 就绪") : QStringLiteral("● 未就绪");
+    if (!st.error_message.empty())
+        msg += QStringLiteral(" · 错误：%1").arg(QString::fromStdString(st.error_message));
+    if (!st.media_type.empty())
+        msg += QStringLiteral(" · 介质 %1").arg(QString::fromStdString(st.media_type));
+    if (st.media_width > 0)
+        msg += QStringLiteral(" · 幅宽 %1mm").arg(st.media_width);
+    statusLbl_->setText(msg);
+    inkBar_->setLevels(st.ink_levels);
 }
 
 void PrinterManagerWidget::onSetDefault() {

@@ -20,9 +20,12 @@ struct PrinterEntry {
     QString name;
     QString model;          // "Epson SureColor P9500" etc.
     QString serial;         // 序列號 — distinguishes units of the same model
-    QString connection;     // "tcp" | "usb"
-    QString host;           // e.g. "192.168.1.100" — TCP only
-    int     port = 9100;
+    // 端口类型（ErgoSoft 四种）："tcp"(RAW 9100) | "lpr" | "usb" | "file"
+    QString connection;
+    QString host;           // TCP / LPR
+    int     port = 9100;    // RAW 默认 9100；LPR 默认 515
+    QString lprQueue;       // LPR 队列名（如 "PASSTHRU"）
+    QString outputDir;      // 打印到文件：输出目录
     QString defaultInkMode; // "PhotoBlack" | "MatteBlack" | "MultiChannel"
     int     defaultDpi = 1440;
     bool    isDefault = false;
@@ -55,7 +58,9 @@ private:
     void onRemove();
     void onDiscover();
     void onTestConnection();
+    void onQueryStatus();         // 双向状态：墨量/介质/错误（PJL 查询）
     void onSetDefault();
+    void updateConnRows();        // 按端口类型 显示/隐藏 host/port/队列/目录行
 
     QVector<PrinterEntry> printers_;
     int currentIdx_ = -1;
@@ -71,11 +76,15 @@ private:
     QComboBox*     connCombo_  = nullptr;
     QLineEdit*     hostEdit_   = nullptr;
     QSpinBox*      portSpin_   = nullptr;
+    QLineEdit*     queueEdit_  = nullptr;   // LPR 队列名
+    QLineEdit*     dirEdit_    = nullptr;   // 打印到文件目录
     QComboBox*     inkCombo_   = nullptr;
     QComboBox*     dpiCombo_   = nullptr;
     QCheckBox*     defaultChk_ = nullptr;
     QPushButton*   testBtn_    = nullptr;
+    QPushButton*   statusBtn_  = nullptr;   // 查询状态（双向）
     QLabel*        statusLbl_  = nullptr;
+    class InkLevelsBar* inkBar_ = nullptr;  // 12 通道墨量条（自绘）
 
     bool blockFormSignals_ = false;
 };
