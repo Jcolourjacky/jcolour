@@ -42,6 +42,13 @@ struct CanvasBlock {
     QString text;                          // text blocks only
     bool    isQr = false;
     QString qrData;                        // QR blocks only
+
+    // 分幅 Tiling（ErgoSoft JobComposer 语义）：超出幅宽的图拆成
+    // 行×列 幅，相邻幅之间留重叠搭接；可交替旋转 180° 补偿喷头方向差。
+    int     tileCols = 1, tileRows = 1;
+    double  tileOverlapMm = 0;
+    bool    tileAlternate = false;
+    bool    tiled() const { return tileCols > 1 || tileRows > 1; }
 };
 
 enum class CanvasTool { Select, Text, Qr, Hand, Measure };
@@ -205,6 +212,7 @@ private:
     void onModeChosen(const QString& key); // per-image mode (5 选 1)
     void updatePreflight();
     void openEnvManager();
+    void openJobCostDialog();   // 作业核算：介质长度/墨耗/成本估算（ErgoSoft CostManager 式）
 
     // real-module wiring
     void submitLayoutToQueue();            // 打印 / 打印整版 → queue::PrintJob × N

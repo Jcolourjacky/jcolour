@@ -48,6 +48,7 @@ enum class Icon {
     ZoomOut,      // 放大镜−
     FitView,      // 缩放适配
     LinkIc,       // 等比锁定（属性栏）
+    TilingIc,     // 分幅 Tiling
 };
 
 // Single-colour pixmap rendered in a 24×24 coordinate space, scaled to `px`

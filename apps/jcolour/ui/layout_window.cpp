@@ -17,6 +17,9 @@
 #include <QDialogButtonBox>
 #include <QActionGroup>
 #include <QTimer>
+#include <QSettings>
+#include <QTableWidget>
+#include <QHeaderView>
 
 #include <QApplication>
 #include <QMenuBar>
@@ -365,6 +368,40 @@ void LayoutCanvas::paintEvent(QPaintEvent*) {
             g.drawLine(QPointF(p.x() + mm * s, p.y()), QPointF(p.x() + mm * s, p.bottom()));
         for (int mm = 50; mm < int(kPaperH); mm += 50)
             g.drawLine(QPointF(p.x(), p.y() + mm * s), QPointF(p.right(), p.y() + mm * s));
+    }
+
+    // 分幅 Tiling 叠加：虚线幅界 + 重叠搭接带 + 幅号（交替旋转幅标 ↻）
+    for (const auto& b : blocks_) {
+        if (!b.tiled() || b.isText) continue;
+        const QRectF r = blockRectPx(b);
+        const double ovPx = b.tileOverlapMm * s;
+        const double tw = r.width() / b.tileCols, th = r.height() / b.tileRows;
+        g.setPen(QPen(QColor("#100A36"), 1, Qt::DashLine));
+        for (int c = 1; c < b.tileCols; ++c)
+            g.drawLine(QPointF(r.x() + c * tw, r.y()), QPointF(r.x() + c * tw, r.bottom()));
+        for (int rr = 1; rr < b.tileRows; ++rr)
+            g.drawLine(QPointF(r.x(), r.y() + rr * th), QPointF(r.right(), r.y() + rr * th));
+        // 重叠带（沿内部幅界两侧各 overlap/2）
+        if (ovPx > 0.5) {
+            g.setPen(Qt::NoPen);
+            g.setBrush(QColor(11, 186, 238, 46));
+            for (int c = 1; c < b.tileCols; ++c)
+                g.drawRect(QRectF(r.x() + c * tw - ovPx / 2, r.y(), ovPx, r.height()));
+            for (int rr = 1; rr < b.tileRows; ++rr)
+                g.drawRect(QRectF(r.x(), r.y() + rr * th - ovPx / 2, r.width(), ovPx));
+        }
+        // 幅号（行主序）+ 交替旋转标记
+        QFont tf2 = g.font(); tf2.setPointSizeF(qMax(7.0, th * 0.16)); tf2.setBold(true);
+        g.setFont(tf2);
+        for (int rr = 0; rr < b.tileRows; ++rr)
+            for (int c = 0; c < b.tileCols; ++c) {
+                const int idx = rr * b.tileCols + c;
+                const bool rot = b.tileAlternate && (idx % 2 == 1);
+                const QRectF cell(r.x() + c * tw, r.y() + rr * th, tw, th);
+                g.setPen(QColor(255, 255, 255, 200));
+                g.drawText(cell, Qt::AlignCenter,
+                           QStringLiteral("%1%2").arg(idx + 1).arg(rot ? QStringLiteral(" ↻") : QString()));
+            }
     }
 
     // 裁切角线（每块四角，打印后裁纸用）
@@ -1302,6 +1339,7 @@ void LayoutWindow::buildMenus() {
         dlg->show();
     });
     QMenu* tools = mb->addMenu(QStringLiteral("工具"));
+    tools->addAction(QStringLiteral("作业核算（用量/成本）…"), [this] { openJobCostDialog(); });
     tools->addAction(QStringLiteral("米尺走纸校正…"), [this] { openEnvManager(); });
     tools->addAction(QStringLiteral("检查线性…"), [this] { openEnvManager(); });
     mb->addMenu(QStringLiteral("帮助"));
@@ -1705,6 +1743,58 @@ QWidget* LayoutWindow::buildToolbox() {
         form->addRow(bb);
         if (dlg.exec() == QDialog::Accepted)
             canvas_->stepRepeatGrid(rows->value(), cols->value(), gx->value(), gy->value()); });
+    add(ic::Icon::TilingIc, rich(QStringLiteral("分幅 Tiling…"), {},
+        QStringLiteral("超幅面拼接：选中块拆行×列幅，带重叠搭接（ErgoSoft 方式）")), false, [this] {
+        if (canvas_->selected() < 0) {
+            statusBar()->showMessage(QStringLiteral("分幅：请先选中一个块"), 4000);
+            return;
+        }
+        auto& blk = canvas_->blocks()[canvas_->selected()];
+        QDialog dlg(this);
+        dlg.setWindowTitle(QStringLiteral("分幅 Tiling"));
+        auto* form = new QFormLayout(&dlg);
+        auto* cols = new QSpinBox; cols->setRange(1, 8); cols->setValue(qMax(1, blk.tileCols));
+        auto* rows = new QSpinBox; rows->setRange(1, 8); rows->setValue(qMax(1, blk.tileRows));
+        auto* ov = new QDoubleSpinBox; ov->setRange(0, 50); ov->setSuffix(" mm");
+        ov->setValue(blk.tiled() ? blk.tileOverlapMm : 10.0);
+        auto* alt = new QCheckBox(QStringLiteral("交替旋转 180°（补偿喷头方向色差）"));
+        alt->setChecked(blk.tileAlternate);
+        auto* sizeLbl = new QLabel;
+        sizeLbl->setStyleSheet("color:#7A776D;");
+        auto refresh = [&, sizeLbl] {
+            const double tw = blk.w / cols->value() + (cols->value() > 1 ? ov->value() : 0);
+            const double th = blk.h / rows->value() + (rows->value() > 1 ? ov->value() : 0);
+            sizeLbl->setText(QStringLiteral("每幅约 %1 × %2 mm（含重叠）")
+                                 .arg(tw, 0, 'f', 0).arg(th, 0, 'f', 0));
+        };
+        QObject::connect(cols, &QSpinBox::valueChanged, &dlg, refresh);
+        QObject::connect(rows, &QSpinBox::valueChanged, &dlg, refresh);
+        QObject::connect(ov, &QDoubleSpinBox::valueChanged, &dlg, refresh);
+        refresh();
+        form->addRow(QStringLiteral("列数"), cols);
+        form->addRow(QStringLiteral("行数"), rows);
+        form->addRow(QStringLiteral("重叠搭接"), ov);
+        form->addRow(alt);
+        form->addRow(sizeLbl);
+        auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        auto* clear = bb->addButton(QStringLiteral("取消分幅"), QDialogButtonBox::ResetRole);
+        connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+        connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+        connect(clear, &QPushButton::clicked, &dlg, [&] {
+            blk.tileCols = blk.tileRows = 1; blk.tileOverlapMm = 0; blk.tileAlternate = false;
+            dlg.reject();
+            canvas_->update();
+        });
+        form->addRow(bb);
+        if (dlg.exec() == QDialog::Accepted) {
+            blk.tileCols = cols->value();
+            blk.tileRows = rows->value();
+            blk.tileOverlapMm = ov->value();
+            blk.tileAlternate = alt->isChecked();
+            canvas_->update();
+            statusBar()->showMessage(QStringLiteral("已分幅 %1×%2 · 重叠 %3mm — 打印整版时逐幅生成作业")
+                .arg(cols->value()).arg(rows->value()).arg(ov->value()), 6000);
+        } });
     add(ic::Icon::ContactSheet, rich(QStringLiteral("联系表…"), {},
         QStringLiteral("多图缩略排版 Contact Sheet")), false, [this] {
         auto* w = new ContactSheetDialog(nullptr);
@@ -2307,6 +2397,15 @@ void LayoutWindow::runActionForShot(const QString& action) {
     }
     else if (action == QLatin1String("origin"))     // 演示零位偏移（截图验证）
         canvas_->setRulerOrigin(150, 100);
+    else if (action == QLatin1String("tiling")) {   // 演示分幅（截图验证）
+        for (auto& b : canvas_->blocks())
+            if (b.name == QLatin1String("seascape_05")) {
+                b.tileCols = 2; b.tileRows = 2; b.tileOverlapMm = 12; b.tileAlternate = true;
+            }
+        canvas_->update();
+    }
+    else if (action == QLatin1String("cost"))
+        QTimer::singleShot(0, this, [this] { openJobCostDialog(); });   // 模态对话框延迟弹出，让截图定时器先排上
     else if (action == QLatin1String("spottuner")) {
         auto* dlg = new VisualSpotTunerDialog(this);
         dlg->show();
@@ -2349,25 +2448,158 @@ void LayoutWindow::submitLayoutToQueue() {
     for (const auto& b : canvas_->blocks()) {
         if (b.isText) continue;   // 文字随版面光栅，不单独成 RIP 工作
         const ModeDef* m = modeDef(b.modeKey);
-        jcolour::queue::PrintJob job;
-        job.id          = b.name + "-" + QDateTime::currentDateTime().toString("hhmmsszzz");
-        job.imagePath   = b.name + ".tif";
-        job.presetName  = printer + QStringLiteral(" · ") + paper + QStringLiteral(" · ") +
-                          QString::fromUtf8(m->name) + QStringLiteral("（") +
-                          QString::fromUtf8(m->lin) + QStringLiteral("）");
-        job.copies      = 1;
-        job.status      = QStringLiteral("pending");
-        job.submittedAt = QDateTime::currentDateTime();
-        job.blackInk    = (b.modeKey == QLatin1String("rgb") || b.modeKey == QLatin1String("rgb16"))
-                              ? jcolour::queue::BlackInk::Either
-                              : jcolour::queue::BlackInk::PK;
-        queueWidget_->addJob(job);
-        ++submitted;
+        // 分幅块 → 逐幅生成作业（ErgoSoft "print every tile on a separate
+        // page"）；幅名带 [幅号/总幅 行-列]，交替旋转幅标注 ↻180°。
+        const int tiles = qMax(1, b.tileCols) * qMax(1, b.tileRows);
+        for (int t = 0; t < tiles; ++t) {
+            jcolour::queue::PrintJob job;
+            QString tileTag;
+            if (b.tiled()) {
+                const int rr = t / b.tileCols, cc = t % b.tileCols;
+                tileTag = QStringLiteral(" [幅%1/%2 %3-%4%5]")
+                    .arg(t + 1).arg(tiles).arg(rr + 1).arg(cc + 1)
+                    .arg(b.tileAlternate && (t % 2 == 1) ? QStringLiteral(" ↻180°")
+                                                         : QString());
+            }
+            job.id          = b.name + tileTag + "-" +
+                              QDateTime::currentDateTime().toString("hhmmsszzz");
+            job.imagePath   = b.name + ".tif";
+            job.presetName  = printer + QStringLiteral(" · ") + paper + QStringLiteral(" · ") +
+                              QString::fromUtf8(m->name) + QStringLiteral("（") +
+                              QString::fromUtf8(m->lin) + QStringLiteral("）") + tileTag;
+            job.copies      = 1;
+            job.status      = QStringLiteral("pending");
+            job.submittedAt = QDateTime::currentDateTime();
+            job.blackInk    = (b.modeKey == QLatin1String("rgb") || b.modeKey == QLatin1String("rgb16"))
+                                  ? jcolour::queue::BlackInk::Either
+                                  : jcolour::queue::BlackInk::PK;
+            queueWidget_->addJob(job);
+            ++submitted;
+        }
     }
     queueWidget_->startProcessing();
     if (rightTabs_) rightTabs_->setCurrentIndex(3);   // 跳到队列
     statusBar()->showMessage(
         QStringLiteral("已送 %1 个工作到 RIP 队列（%2 · %3）").arg(submitted).arg(printer, paper), 5000);
+}
+
+void LayoutWindow::openJobCostDialog() {
+    // 作业核算（ErgoSoft QueueManager & CostManager 的估算版）：
+    // 介质长度 = 版面内容最低点 + 收纸边；墨耗 = Σ 块面积 × 模式基准 ×
+    // 平均覆盖率。全部为估算值 —— 正式版由 RIP 光栅逐像素统计替换。
+    QSettings st;
+    const double defMedia = st.value("cost/mediaPerSqm", 180.0).toDouble();
+    const double defInk   = st.value("cost/inkPerMl", 1.5).toDouble();
+    const double defMlSqm = st.value("cost/inkMlPerSqm", 12.0).toDouble();
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("作业核算 · 用量与成本估算"));
+    dlg.resize(660, 480);
+    auto* v = new QVBoxLayout(&dlg);
+
+    // 单价参数（记住设置）
+    auto* priceRow = new QHBoxLayout;
+    auto mkPrice = [](double v, double max, const char* suffix) {
+        auto* s = new QDoubleSpinBox;
+        s->setRange(0, max); s->setValue(v); s->setSuffix(QString::fromUtf8(suffix));
+        s->setFixedWidth(120);
+        return s;
+    };
+    auto* mediaPrice = mkPrice(defMedia, 9999, " 元/m²");
+    auto* inkPrice   = mkPrice(defInk, 99, " 元/ml");
+    auto* mlPerSqm   = mkPrice(defMlSqm, 60, " ml/m²");
+    priceRow->addWidget(new QLabel(QStringLiteral("介质单价")));
+    priceRow->addWidget(mediaPrice);
+    priceRow->addWidget(new QLabel(QStringLiteral("墨水单价")));
+    priceRow->addWidget(inkPrice);
+    priceRow->addWidget(new QLabel(QStringLiteral("彩色墨耗基准")));
+    priceRow->addWidget(mlPerSqm);
+    priceRow->addStretch();
+    v->addLayout(priceRow);
+
+    auto* table = new QTableWidget;
+    table->setColumnCount(5);
+    table->setHorizontalHeaderLabels(
+        {QStringLiteral("块"), QStringLiteral("模式"), QStringLiteral("面积 m²"),
+         QStringLiteral("墨耗 ml"), QStringLiteral("幅数")});
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->verticalHeader()->setVisible(false);
+    table->horizontalHeader()->setStretchLastSection(true);
+    v->addWidget(table, 1);
+
+    auto* totals = new QLabel;
+    totals->setStyleSheet(
+        "background:#E7F7FD;border:1px solid #A9E4F7;border-radius:6px;"
+        "padding:9px 12px;font-size:12.5px;color:#100A36;");
+    totals->setWordWrap(true);
+    v->addWidget(totals);
+    auto* note = new QLabel(QStringLiteral(
+        "估算口径：覆盖率按 75% 计；单黑/黑+灰按彩色基准的 50%/70%；"
+        "介质长度 = 内容最低点 + 20mm 收纸边 × 整卷宽计价。正式版由 RIP 光栅统计替换。"));
+    note->setStyleSheet("font-size:10.5px;color:#8A8779;");
+    note->setWordWrap(true);
+    v->addWidget(note);
+
+    auto* bb = new QDialogButtonBox(QDialogButtonBox::Close);
+    bb->button(QDialogButtonBox::Close)->setText(QStringLiteral("关闭"));
+    connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    connect(bb->button(QDialogButtonBox::Close), &QPushButton::clicked, &dlg, &QDialog::accept);
+    v->addWidget(bb);
+
+    auto recompute = [&, table, totals] {
+        const double mlColor = mlPerSqm->value();
+        double sumArea = 0, sumInk = 0, maxBottom = 0;
+        const auto& blocks = canvas_->blocks();
+        int rows = 0;
+        for (const auto& b : blocks) if (!b.isText) ++rows;
+        table->setRowCount(rows);
+        int r = 0;
+        for (const auto& b : blocks) {
+            if (b.isText) continue;
+            const ModeDef* m = modeDef(b.modeKey);
+            const int tiles = qMax(1, b.tileCols) * qMax(1, b.tileRows);
+            // 分幅含重叠：每幅尺寸 = 块/幅数 + 重叠
+            double area = (b.w / 1000.0) * (b.h / 1000.0);
+            if (b.tiled()) {
+                const double tw = b.w / b.tileCols + (b.tileCols > 1 ? b.tileOverlapMm : 0);
+                const double th = b.h / b.tileRows + (b.tileRows > 1 ? b.tileOverlapMm : 0);
+                area = tiles * (tw / 1000.0) * (th / 1000.0);
+            }
+            const double factor = (b.modeKey == QLatin1String("mono")) ? 0.5
+                                : (b.modeKey == QLatin1String("gray")) ? 0.7 : 1.0;
+            const double ink = area * mlColor * 0.75 * factor;
+            sumArea += area;
+            sumInk += ink;
+            maxBottom = qMax(maxBottom, b.y + b.h);
+            table->setItem(r, 0, new QTableWidgetItem(b.name));
+            table->setItem(r, 1, new QTableWidgetItem(QString::fromUtf8(m->name)));
+            table->setItem(r, 2, new QTableWidgetItem(QString::number(area, 'f', 3)));
+            table->setItem(r, 3, new QTableWidgetItem(QString::number(ink, 'f', 1)));
+            table->setItem(r, 4, new QTableWidgetItem(
+                b.tiled() ? QStringLiteral("%1×%2").arg(b.tileCols).arg(b.tileRows)
+                          : QStringLiteral("—")));
+            ++r;
+        }
+        const double lengthM = (maxBottom + 20.0) / 1000.0;
+        const double mediaSqm = lengthM * (kPaperW / 1000.0);
+        const double mediaCost = mediaSqm * mediaPrice->value();
+        const double inkCost = sumInk * inkPrice->value();
+        totals->setText(QStringLiteral(
+            "<b>介质</b>　长度 %1 m · 计价面积 %2 m² · %3 元　　"
+            "<b>墨水</b>　≈%4 ml · %5 元　　<b>合计 ≈ %6 元</b>")
+            .arg(lengthM, 0, 'f', 2).arg(mediaSqm, 0, 'f', 2)
+            .arg(mediaCost, 0, 'f', 0).arg(sumInk, 0, 'f', 1)
+            .arg(inkCost, 0, 'f', 0).arg(mediaCost + inkCost, 0, 'f', 0));
+        table->resizeColumnsToContents();
+    };
+    for (auto* s : {mediaPrice, inkPrice, mlPerSqm})
+        connect(s, &QDoubleSpinBox::valueChanged, &dlg, recompute);
+    recompute();
+    dlg.exec();
+
+    st.setValue("cost/mediaPerSqm", mediaPrice->value());
+    st.setValue("cost/inkPerMl", inkPrice->value());
+    st.setValue("cost/inkMlPerSqm", mlPerSqm->value());
 }
 
 void LayoutWindow::runAutoNest() {

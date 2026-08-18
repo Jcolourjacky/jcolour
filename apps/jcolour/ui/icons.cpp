@@ -338,6 +338,18 @@ void draw(QPainter& p, Icon name, const QColor& color) {
             p.drawLine(QPointF(9, 20), QPointF(4, 20)); p.drawLine(QPointF(4, 20), QPointF(4, 15));
             break;
         }
+        case Icon::TilingIc: {     // 分幅：大矩形 + 虚线内界
+            p.drawRoundedRect(QRectF(3.5, 5, 17, 14), 1.5, 1.5);
+            QPen dash = p.pen();
+            dash.setStyle(Qt::DashLine);
+            dash.setWidthF(1.4);
+            p.save();
+            p.setPen(dash);
+            p.drawLine(QPointF(12, 5), QPointF(12, 19));
+            p.drawLine(QPointF(3.5, 12), QPointF(20.5, 12));
+            p.restore();
+            break;
+        }
         case Icon::LinkIc: {       // 链环（等比锁定）
             p.save();
             p.translate(12, 12); p.rotate(-45); p.translate(-12, -12);
