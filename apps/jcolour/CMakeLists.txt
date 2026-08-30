@@ -181,6 +181,8 @@ set(JCOLOUR_SOURCES
     ui/measure_driver_i1.h
     ui/spot_tuner_dialog.cpp
     ui/spot_tuner_dialog.h
+    ui/til_wizard.cpp
+    ui/til_wizard.h
     ui/print_gate_bar.cpp
     ui/print_gate_bar.h
     ui/page_ink_management.cpp
