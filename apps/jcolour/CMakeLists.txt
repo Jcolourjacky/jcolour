@@ -183,6 +183,9 @@ set(JCOLOUR_SOURCES
     ui/spot_tuner_dialog.h
     ui/til_wizard.cpp
     ui/til_wizard.h
+    ui/g7_rgb_dialog.cpp
+    ui/g7_rgb_dialog.h
+    ../../engine/src/g7_rgb.cpp
     ui/print_gate_bar.cpp
     ui/print_gate_bar.h
     ui/page_ink_management.cpp

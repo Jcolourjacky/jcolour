@@ -4,6 +4,7 @@
 #include "icons.h"
 #include "spot_tuner_dialog.h"
 #include "til_wizard.h"
+#include "g7_rgb_dialog.h"
 #include "../paper_state.h"
 #include "../queue.h"
 #include "../nesting.h"
@@ -1466,6 +1467,13 @@ void LayoutWindow::buildMenus() {
         dlg->setAttribute(Qt::WA_DeleteOnClose);
         dlg->show();
     });
+    colour->addAction(QStringLiteral("G7+ RGB 校正…"), [this] {
+        const QString paper = paperCombo_ ? paperCombo_->currentText()
+                                          : QStringLiteral("Photo Rag");
+        auto* dlg = new G7RgbDialog(paper, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show();
+    });
     colour->addAction(QStringLiteral("专色库…"), [this] {
         auto* dlg = new SpotLibraryDialog(this);
         dlg->setAttribute(Qt::WA_DeleteOnClose);
@@ -2539,6 +2547,10 @@ void LayoutWindow::runActionForShot(const QString& action) {
     }
     else if (action == QLatin1String("cost"))
         QTimer::singleShot(0, this, [this] { openJobCostDialog(); });   // 模态对话框延迟弹出，让截图定时器先排上
+    else if (action == QLatin1String("g7rgb")) {
+        auto* dlg = new G7RgbDialog(QStringLiteral("Photo Rag"), this);
+        dlg->show();
+    }
     else if (action == QLatin1String("til")) {
         auto* dlg = new TILWizardDialog(QStringLiteral("Photo Rag"), this);
         dlg->show();
