@@ -186,6 +186,23 @@ set(JCOLOUR_SOURCES
     ui/g7_rgb_dialog.cpp
     ui/g7_rgb_dialog.h
     ../../engine/src/g7_rgb.cpp
+
+    # GMG 借鉴（2026-11）：建档前置线性化 + 限墨 / 色域外两种映射 / 再校准 / SBOM
+    print_base_io.cpp
+    print_base_io.h
+    sbom.cpp
+    sbom.h
+    ui/linearization_dialog.cpp
+    ui/linearization_dialog.h
+    ui/recalibration_dialog.cpp
+    ui/recalibration_dialog.h
+    ui/oog_compare_dialog.cpp
+    ui/oog_compare_dialog.h
+    ui/about_dialog.cpp
+    ui/about_dialog.h
+    ui/render_intent_options.h
+    ui/i1_spot.h
+    ui/lab_color.h
     ui/print_gate_bar.cpp
     ui/print_gate_bar.h
     ui/page_ink_management.cpp
@@ -286,6 +303,32 @@ if(APPLE)
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.jcolour.app"
     )
 endif()
+
+# ============================================================
+# App-side tests (no Catch2 / QtTest needed — engine/tests/standalone/check.h)
+# ============================================================
+enable_testing()
+add_executable(test-jcolour-app-core
+    tests/test_app_core.cpp
+    sbom.cpp
+    print_base_io.cpp
+)
+target_link_libraries(test-jcolour-app-core PRIVATE
+    Qt6::Core
+    jcolour-calibration
+    jcolour-spectral
+    jcolour-argyll
+    jcolour-i1sdk
+    ${LCMS2_FULL_PATH}
+    ${TIFF_FULL_PATH}
+)
+target_include_directories(test-jcolour-app-core PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${JCOLOUR_ROOT}/engine/tests/standalone
+    ${LCMS2_INCLUDE_DIRS}
+    ${TIFF_INCLUDE_DIRS}
+)
+add_test(NAME jcolour-app-core COMMAND test-jcolour-app-core)
 
 # Install
 install(TARGETS jcolour-ui DESTINATION bin)

@@ -17,6 +17,8 @@
 #include "../bw_mode_widget.h"
 #include "../preview_widget.h"      // SoftProofingWidget
 #include "../ab_softproof_view.h"
+#include "oog_compare_dialog.h"
+#include "render_intent_options.h"
 #include "../test_print.h"
 #include "../spot_color.h"
 #include "../nesting.h"
@@ -128,11 +130,21 @@ PrintInspector::PrintInspector(QWidget* parent) : QWidget(parent) {
         auto* l = new QVBoxLayout(w);
         l->setContentsMargins(0, 0, 0, 0); l->setSpacing(9);
         l->addWidget(frow(TR("ICC profile"), mkCombo({"PhotoRag_P9500_WF3", "Browse…"})));
-        auto* intent = mkCombo({"Perceptual", "Relative Colorimetric", "Saturation", "Absolute"}, 1);
+        auto* intent = mkCombo(renderIntentLabels(), 0);   // 摄影默认：视觉保真
+        intent->setToolTip(renderIntentTooltip());
         l->addWidget(frow(TR("Rendering intent"), intent));
+        auto* oogAb = new QPushButton(QStringLiteral("色域外处理 A/B 对比…"));
+        oogAb->setCursor(Qt::PointingHandCursor);
+        connect(oogAb, &QPushButton::clicked, this, [this, intent] {
+            auto* dlg = new OogCompareDialog(this);
+            dlg->setAttribute(Qt::WA_DeleteOnClose);
+            connect(dlg, &OogCompareDialog::strategyChosen, intent, &QComboBox::setCurrentIndex);
+            dlg->show();
+        });
+        l->addWidget(oogAb);
         gamut_ = new GamutAdvisorWidget;
         connect(gamut_, &GamutAdvisorWidget::applyRequested, this,
-                [intent](int it, bool) { intent->setCurrentIndex(it); });
+                [intent](int it, bool) { intent->setCurrentIndex(renderIndexForAdvice(it)); });
         l->addWidget(gamut_);
         col->addWidget(makeSection(QStringLiteral("紙張與色彩"), w, false));
     }

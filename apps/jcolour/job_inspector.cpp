@@ -2,6 +2,7 @@
 #include "bw_mode_widget.h"
 #include "gamut_advisor_widget.h"
 #include "ab_softproof_view.h"
+#include "ui/render_intent_options.h"
 #include "curve_editor.h"
 #include "preview_widget.h"  // SoftProofingWidget
 #include "translations.h"
@@ -263,9 +264,9 @@ QWidget* JobInspector::buildColorTab() {
 
     mgmt->addWidget(sectionLabel("Rendering intent"));
     intentCombo_ = new QComboBox;
-    intentCombo_->addItems({"Perceptual", "Relative Colorimetric",
-                            "Saturation", "Absolute Colorimetric"});
-    intentCombo_->setCurrentIndex(1);
+    intentCombo_->addItems(jcolour::ui::renderIntentLabels());   // 含两种色域外处理
+    intentCombo_->setToolTip(jcolour::ui::renderIntentTooltip());
+    intentCombo_->setCurrentIndex(0);                             // 摄影默认：视觉保真
     mgmt->addWidget(intentCombo_);
 
     bpcCheck_ = new QCheckBox("Black Point Compensation");
@@ -276,7 +277,7 @@ QWidget* JobInspector::buildColorTab() {
     auto* gamutAdvisor = new jcolour::ui::GamutAdvisorWidget;
     connect(gamutAdvisor, &jcolour::ui::GamutAdvisorWidget::applyRequested, this,
             [this](int intent, bool bpc) {
-        intentCombo_->setCurrentIndex(intent);
+        intentCombo_->setCurrentIndex(jcolour::ui::renderIndexForAdvice(intent));
         bpcCheck_->setChecked(bpc);
         if (!blockSignals_) emit jobModified();
     });
@@ -634,7 +635,8 @@ void JobInspector::setJob(const Job& j) {
     marginR_->setValue(int(j.marginsMm[1]));
     marginB_->setValue(int(j.marginsMm[2]));
     marginL_->setValue(int(j.marginsMm[3]));
-    intentCombo_->setCurrentIndex(j.renderingIntent);
+    intentCombo_->setCurrentIndex(jcolour::ui::renderIndexFor(
+        j.renderingIntent, jcolour::gamut::OogStrategy(j.oogStrategy)));
     bpcCheck_->setChecked(j.blackPointCompensation);
     slC_->setValue(j.corrC); slM_->setValue(j.corrM);
     slY_->setValue(j.corrY); slK_->setValue(j.corrK);
@@ -658,7 +660,11 @@ Job JobInspector::buildJob() const {
     j.marginsMm[1] = marginR_->value();
     j.marginsMm[2] = marginB_->value();
     j.marginsMm[3] = marginL_->value();
-    j.renderingIntent = intentCombo_->currentIndex();
+    {
+        const auto rc = jcolour::ui::renderChoiceAt(intentCombo_->currentIndex());
+        j.renderingIntent = rc.lcmsIntent;
+        j.oogStrategy = int(rc.oog);
+    }
     j.blackPointCompensation = bpcCheck_->isChecked();
     j.corrC = slC_->value(); j.corrM = slM_->value();
     j.corrY = slY_->value(); j.corrK = slK_->value();

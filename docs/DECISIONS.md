@@ -867,6 +867,73 @@ v1.5 评估时考虑：
 
 ---
 
+## ADR-31 建档前置：先墨限与线性化，再 TIL，再 G7 / ICC（不可跳过）
+
+**Status**：Accepted
+**Date**：2026-11
+
+**Context**
+GMG ColorServer 5.7 SmartProfiler 在特性化之前先做线性化与限墨，稳定性明显更好。jcolour 已有「墨量上限 TIL 测定向导」（2026-08）与黑版线性化面板，但建档向导第 5 步把「墨量上限 → 线性化 → G7 → ICC」压成一个模拟按钮，线性化与限墨可以被跳过，也没有数据落地。
+
+**Decision**
+1. 建档向导改为 8 步，第 5「单通道墨限 + 线性化」、第 6「总墨量 TIL」为固定步骤；引擎 `profiling_gate()`（`engine/calibration/print_base.h`）不通过时第 7「G7 + ICC」与第 8「存为标准」锁定，左侧步骤列表点不进去并说明原因。
+2. 顺序：**单通道墨限 → 每通道线性化（墨限内）→ 总墨量 TIL（在已线性化设备上测）→ G7 → ICC**。与 Fiery XF / GMG 一致；TIL 的组合色块按线性化后的通道值打印才有意义。改墨限后曲线标「过期」（CURVE_STALE），重做线性化会清掉 TIL（TIL_BEFORE_LIN）。PIPELINE §3/§4 的「先 TIL 后线性化」按本条订正。
+3. 线性化度量沿用 ADR-30：全部 11 个活动通道（K/LC/C/VLM/VM/Y/Or/GY/LGY/V/Gr）用 SCTV（ISO 20654），V 值直接由 CIELAB 导出；单通道墨限 = ΔE00 距纸白达峰值 98% 的点，峰后回落记「青铜化」。
+4. 地基（每通道渐变实测、墨限、曲线、建档时曲线、TIL、可选灰块基准）以 JSON 存进打印环境（`PaperConfig.base`），是再校准（ADR-33）的「建档时状态」。
+
+**Consequences**
+- 新文件：`engine/calibration/print_base.{h,cpp}`、`printer_sim.{h,cpp}`（无仪器模拟）、`apps/jcolour/ui/linearization_dialog.*`、`print_base_io.*`；TIL 向导加 `setChannelLimits()` / `tilApplied`。
+- 真实线性化靶须经 PJL 直连送原始通道墨量（ADR-26）；系统打印对话框只能出 RGB 近似色块，属实机验收项。
+
+## ADR-32 色域外映射两种策略：视觉保真（默认）/ 色度最近
+
+**Status**：Accepted
+**Date**：2026-11
+
+**Context**
+GMG OpenColor 3.4 的色域外映射可选「色度最近」或「视觉保真」。摄影作品更在意饱和区的层次与色相，而不是单色最小 ΔE。
+
+**Decision**
+- 渲染意图下拉改为：视觉保真（保外观，**摄影默认**）/ 色度最近（最小 ΔE00）/ 可感知（ICC 表）/ 饱和度（ICC 表）/ 绝对色度。作业、预设新增 `oogStrategy`，旧数据缺省读成视觉保真。
+- 引擎 `engine/src/oog_mapping.{h,cpp}`：段最大值色域边界（50 L* × 90 色相，3×3 膨胀 + 双线性）；视觉保真 = 明度黑白点映射 + 沿「指向目标 cusp 明度的中性点」射线做 80% 膝点压缩（色相不变，源边界映到目标边界）；色度最近 = 色域内不动、色域外在色相 ±6°/全明度范围粗搜 + 细搜 ΔE00 最小的边界点。
+- 落地为 **ICC 设备链接**（源设备空间 33³ CLUT，节点走浮点 Lab），不用 Lab 抽象配置文件：v4 16 位 Lab 编码把 a*/b* 限在 ±128，ProPhoto 绿/蓝进 PCS 就被削平。打印机 ICC 保持纯净（ADR-29 原则 1）。
+- A/B 对比对话框（ADR-29 L3）：同一张图两种策略并排，真实 LCMS 变换，给出色域外 ΔE00 与相邻像素差，用户拍板后写回渲染意图。
+
+**Consequences**
+- 测试（ProPhoto → sRGB）：色度最近的色域外平均 ΔE00 更低；视觉保真色相漂移 0°、饱和渐变台阶均匀，色度最近会挪色相（最多 6°）并在最外几阶挤成平台。
+- 实际打印路径（PJL 16 位直出）尚未接线，A/B 与作业设置先落地，打印时按 `oogStrategy` 建 `OogTransform` 待打印管线接通。
+
+## ADR-33 打印机再校准：少量色块只更新线性化
+
+**Status**：Accepted
+**Date**：2026-11
+
+**Context**
+换纸批次 / 换墨批次后机器偏离建档状态。重建特性文件要上千色块；GMG ColorServer「印刷机再校准」用少量色块把机器拉回原状态。
+
+**Decision**
+- 再校准靶 48 块：11 通道 × 4 阶（25/50/75/100%）+ 纸白 + 3 个三色灰。
+- 参考 = 建档时状态：通道色块由「建档时曲线 → 建档渐变实测（PCHIP 插值）」得出；灰块用建档时记录的灰块基准（可选）。
+- 新曲线 = 建档响应形状 × 稀疏实测比例修正，在墨限内反解；墨变淡到墨限也拉不回时标 HIT_LIMIT（只能部分校正，建议重新建档）；纸白变化 > 2 ΔE00 标 PAPER_SHIFT。
+- 「应用」只替换 `PaperConfig.base` 里的当前曲线；ICC、G7、墨限、TIL、建档时曲线、版本号都不变；记录校准前后 ΔE00（`recalHistory`），换墨批次时环境墨批跟上新批号。
+- 旧版环境没有地基时只能用模拟基准演示、不能应用。
+
+**Consequences**
+- 新文件：`engine/calibration/recalibration.{h,cpp}`、`apps/jcolour/ui/recalibration_dialog.*`；入口：色彩菜单、打印环境管理器「再校准（换纸 / 换墨批次）…」。
+- 模拟验证：4 个通道漂移时通道色块平均 ΔE00 降到原来的 0.4 倍以下、< 1.0，灰块同步改善；实机效果待 i1Pro3 + PJL 直连验收。
+
+## ADR-34 「关于」里的软件物料清单（SBOM）与第三方声明
+
+**Status**：Accepted
+**Date**：2026-11
+
+**Decision**
+帮助 → 关于 jcolour：三页（关于 / 软件物料清单 / 第三方声明）。组件版本取运行时实际加载库的报告（Qt、Little CMS、libtiff、SQLite），ArgyllCMS / i1Pro3 SDK 运行时探测；导出 **CycloneDX 1.5 JSON**（与 gcolour、ProofTrack 统一格式）与第三方声明文本。GPL / AGPL 组件（Gutenprint、ArgyllCMS）注明为独立进程、未链接。实现 `apps/jcolour/sbom.{h,cpp}`、`ui/about_dialog.*`。
+
+（统一账号 / 授权：按用户决定不做，jcolour 不预留账号 / 登录 / 授权接口。）
+
+---
+
 ## 索引
 
 | 编号 | 决策 | 状态 |
@@ -901,3 +968,7 @@ v1.5 评估时考虑：
 | **ADR-28** | **Mutoh 推迟到 v1.5** | **Accepted** |
 | **ADR-29** | **广色域映射分层架构（GamutAdvisor + SemanticGamutMapper）** | **Accepted** |
 | **ADR-30** | **线性化职责分工：中性(WF1/2/3) 用 SCTV；密度只管墨量上限；彩色靠 G7+ICC** | **Accepted** |
+| **ADR-31** | **建档前置：墨限 → 线性化 → TIL → G7 → ICC，不可跳过（对标 SmartProfiler）** | **Accepted** |
+| **ADR-32** | **色域外映射：视觉保真（摄影默认）/ 色度最近，ICC 设备链接落地** | **Accepted** |
+| **ADR-33** | **打印机再校准：48 块只更新线性化，不重建特性文件** | **Accepted** |
+| **ADR-34** | **「关于」SBOM（CycloneDX 1.5）与第三方声明** | **Accepted** |

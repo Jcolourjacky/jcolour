@@ -6,6 +6,10 @@
 #include "icons.h"
 #include "measure_widget.h"
 #include "measure_driver_i1.h"
+#include "linearization_dialog.h"
+#include "til_wizard.h"
+#include "../print_base_io.h"
+#include "print_base.h"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -28,6 +32,8 @@
 #include <QUuid>
 #include <QDateTime>
 
+#include <cmath>
+
 namespace jcolour {
 
 namespace {
@@ -43,9 +49,15 @@ const StepDef kStepDefs[] = {
      "列印 GMG 測試圖，用米尺量左右標尺（基準 280mm）算走紙補償。每「機＋紙」一次，存檔後可隨時重印米尺驗證。", "量走紙"},
     {"選測量設備",
      "選擇量測儀器（X-Rite i1Pro3 等），自動校準時用它讀數。", nullptr},
-    {"校準集 · 5 種列印方式（自動）",
-     "系統自動替 5 種列印方式跑完整校準：噴頭 → 墨量上限 → 線性化 → G7 → ICC。"
-     "中性(WF1/2/3) 線性化走 SCTV (ISO 20654)，密度只管墨量上限，彩色靠 G7+ICC。", "開始自動校準"},
+    {"單通道墨限 + 線性化",
+     "建檔前置（對標 GMG SmartProfiler，不可跳過）：11 個活動通道各打 13 階漸變，自動找墨限，"
+     "墨限內按 SCTV (ISO 20654) 做每通道線性化。", "打開線性化嚮導"},
+    {"總墨量 TIL",
+     "建檔前置（不可跳過）：在已線性化的設備上打多列 TIL 靶，自動拐點 + 目檢渗墨定總墨量。"
+     "單通道墨限由上一步帶入。", "打開 TIL 測定"},
+    {"校準集 · G7 + ICC（5 種列印方式）",
+     "墨限與線性化完成後才開放：噴頭檢查 → 各模式 G7 灰平衡 → ICC 特性化。"
+     "中性(WF1/2/3) 線性化走 SCTV，密度只管墨量上限，彩色靠 G7+ICC。", "開始自動校準"},
     {"存為標準",
      "寫入紙張狀態庫 → READY，並啟用自動校驗。", "存為標準"},
 };
@@ -76,7 +88,18 @@ CalibrationStepper::CalibrationStepper(QWidget* parent) : QWidget(parent) {
         "QListWidget{background:#FAFAF7;border:none;border-right:1px solid #DDD9CF;padding:12px 8px;}"
         "QListWidget::item{padding:11px 9px;border-radius:8px;color:#4A4740;}"
         "QListWidget::item:selected{background:#E7F7FD;color:#0A6E8C;}");
-    connect(stepList_, &QListWidget::currentRowChanged, this, [this](int r){ if (r >= 0) showStep(r); });
+    connect(stepList_, &QListWidget::currentRowChanged, this, [this](int r) {
+        if (r < 0) return;
+        QString why;
+        if (!canEnter(r, &why)) {          // 不可跳過：退回當前步並說明原因
+            const QSignalBlocker b(stepList_);
+            stepList_->setCurrentRow(step_);
+            lockNote_->setText(QStringLiteral("🔒 %1").arg(why));
+            lockNote_->setVisible(true);
+            return;
+        }
+        showStep(r);
+    });
     root->addWidget(stepList_);
 
     // ── right: current step panel ───────────────────────────────────
@@ -103,7 +126,13 @@ CalibrationStepper::CalibrationStepper(QWidget* parent) : QWidget(parent) {
     rl->addWidget(title_);
     rl->addSpacing(5);
     rl->addWidget(lead_);
-    rl->addSpacing(18);
+    lockNote_ = new QLabel;
+    lockNote_->setWordWrap(true);
+    lockNote_->setStyleSheet("font-size:12.5px;color:#6B5A00;background:#fbf2dd;border-radius:8px;padding:8px 12px;");
+    lockNote_->setVisible(false);
+    rl->addSpacing(8);
+    rl->addWidget(lockNote_);
+    rl->addSpacing(10);
 
     panels_ = new QStackedWidget;
 
@@ -196,7 +225,7 @@ CalibrationStepper::CalibrationStepper(QWidget* parent) : QWidget(parent) {
     connect(nextBtn_, &QPushButton::clicked, this, [this] {
         // input-only steps auto-complete when advancing.
         if (step_ == 0 || step_ == 1 || step_ == 3) { stepDone_[step_] = true; updateStepList(); }
-        if (step_ < kSteps - 1) stepList_->setCurrentRow(step_ + 1);
+        if (step_ < kSteps - 1) stepList_->setCurrentRow(step_ + 1);   // 閘門在 currentRowChanged
     });
     bottom->addWidget(nextBtn_);
     rl->addLayout(bottom);
@@ -215,9 +244,35 @@ void CalibrationStepper::buildSteps() {
 
 void CalibrationStepper::updateStepList() {
     for (int i = 0; i < kSteps; ++i) {
-        QString mark = stepDone_[i] ? "✓ " : QString("%1  ").arg(i + 1);
+        QString mark = stepDone_[i] ? "✓ " : (canEnter(i) ? QString("%1  ").arg(i + 1)
+                                                          : QStringLiteral("🔒 "));
         stepList_->item(i)->setText(mark + kStepDefs[i].title);
     }
+}
+
+QString CalibrationStepper::paperNameForDialogs() const {
+    return paperNameEdit_ && !paperNameEdit_->text().isEmpty() ? paperNameEdit_->text()
+                                                               : QStringLiteral("未命名紙");
+}
+
+bool CalibrationStepper::canEnter(int i, QString* why) const {
+    auto deny = [why](const QString& w) { if (why) *why = w; return false; };
+    if (i <= 4) return true;
+    if (i == 5 && !stepDone_[4])
+        return deny(QStringLiteral("先完成「單通道墨限 + 線性化」：TIL 必須在已線性化的設備上測。"));
+    if (i == 6) {
+        if (!draft_.hasBase)
+            return deny(QStringLiteral("先完成「單通道墨限 + 線性化」與「總墨量 TIL」，才能做 G7 / ICC。"));
+        const auto g = printbase::profiling_gate(draft_.base, printbase::epson_p_active_channels());
+        if (!g.ready) {
+            QStringList t;
+            for (const auto& is : g.issues) t << gateIssueText(is);
+            return deny(QStringLiteral("建檔前置未完成：%1").arg(t.mid(0, 3).join(QStringLiteral("；"))));
+        }
+    }
+    if (i == 7 && !stepDone_[6])
+        return deny(QStringLiteral("先跑完「校準集 · G7 + ICC」。"));
+    return true;
 }
 
 void CalibrationStepper::reloadPrinters() {
@@ -248,6 +303,8 @@ void CalibrationStepper::resetForNew() {
     draft_.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     draft_.configName = QStringLiteral("標準");
     draft_.version = 1;
+    draft_.hasBase = false;
+    draft_.base = {};
     for (int i = 0; i < kSteps; ++i) stepDone_[i] = false;
     reloadPrinters();
     if (paperNameEdit_) { paperNameEdit_->clear(); paperMetaEdit_->clear(); batchEdit_->setText("#A7"); }
@@ -260,6 +317,12 @@ void CalibrationStepper::startFrom(const PaperConfig& base) {
     isRecal_ = true;
     draft_ = base;
     draft_.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    // 重新校正 = 完整重建：墨限 / 線性化 / TIL 必須重做（舊實測會帶進線性化嚮導供參考）
+    draft_.hasBase = false;
+    draft_.base.totalInkLimit = 0;
+    draft_.base.tilMeasuredOnLinearized = false;
+    draft_.recalHistory.clear();
+    draft_.lastRecalibrated = QDateTime();
     paperNameEdit_->setText(base.paperName);
     paperMetaEdit_->setText(base.paperMeta);
     batchEdit_->setText(base.inkBatch);
@@ -271,6 +334,7 @@ void CalibrationStepper::startFrom(const PaperConfig& base) {
 
 void CalibrationStepper::showStep(int i) {
     step_ = i;
+    if (lockNote_) lockNote_->setVisible(false);
     title_->setText(QString("步驟 %1 · %2").arg(i + 1).arg(kStepDefs[i].title));
     lead_->setText(kStepDefs[i].lead);
     result_->setVisible(false);
@@ -279,8 +343,10 @@ void CalibrationStepper::showStep(int i) {
         case 1: panels_->setCurrentIndex(1); break;   // paper
         case 2: panels_->setCurrentIndex(3); break;   // 米尺 (action)
         case 3: panels_->setCurrentIndex(2); break;   // device
-        case 4: panels_->setCurrentIndex(3); break;   // 自動校準 (action)
-        case 5: panels_->setCurrentIndex(3); break;   // 存標準 (action)
+        case 4: panels_->setCurrentIndex(3); break;   // 墨限 + 線性化 (action)
+        case 5: panels_->setCurrentIndex(3); break;   // TIL (action)
+        case 6: panels_->setCurrentIndex(3); break;   // 自動校準 G7+ICC (action)
+        case 7: panels_->setCurrentIndex(3); break;   // 存標準 (action)
         default: panels_->setCurrentIndex(3); break;
     }
     if (panels_->currentIndex() == 3) {
@@ -389,7 +455,59 @@ void CalibrationStepper::doStepAction() {
             }
             break;
         }
-        case 4: {  // 校準集 · 5 種列印方式自動跑
+        case 4: {  // 單通道墨限 + 線性化（建檔前置，不可跳過）
+            ui::LinearizationDialog dlg(paperNameForDialogs(), draft_.base, this);
+            if (dlg.exec() != QDialog::Accepted) {
+                warn(QStringLiteral("線性化未完成——這是建檔前置步驟，完成前不能測 TIL、不能建檔。"));
+                break;
+            }
+            draft_.base = dlg.result();
+            draft_.hasBase = true;
+            stepDone_[5] = false;      // 線性化變了：TIL 與 G7/ICC 都要重做
+            stepDone_[6] = false;
+            QStringList lim;
+            for (const auto& c : draft_.base.channels)
+                lim << QStringLiteral("%1 %2%").arg(QString::fromStdString(c.channel))
+                           .arg(int(std::lround(c.effectiveLimit() * 100)));
+            ok(QStringLiteral("✓ 11 個通道已線性化（SCTV）%1\n墨限：%2\n再校準基準灰塊：%3")
+                   .arg(dlg.simulated() ? QStringLiteral("（含模擬讀數）") : QString(),
+                        lim.join(QStringLiteral(" · ")),
+                        draft_.base.grayReference.empty() ? QStringLiteral("未記錄（可選）")
+                                                          : QStringLiteral("已記錄 %1 塊").arg(draft_.base.grayReference.size())));
+            break;
+        }
+        case 5: {  // 總墨量 TIL（在線性化之後）
+            ui::TILWizardDialog dlg(paperNameForDialogs(), this);
+            auto lim = [this](const char* ch) {
+                const auto* c = draft_.base.find(ch);
+                return c ? int(std::lround(c->effectiveLimit() * 100)) : 100;
+            };
+            dlg.setChannelLimits(lim("C"), lim("VM"), lim("Y"), lim("K"),
+                                 QStringLiteral("上一步「每通道線性化」"));
+            connect(&dlg, &ui::TILWizardDialog::tilApplied, this, [this](int til) {
+                draft_.base.totalInkLimit = til;
+                draft_.base.tilMeasuredOnLinearized = true;
+            });
+            dlg.exec();
+            if (draft_.base.totalInkLimit <= 0 || !draft_.base.tilMeasuredOnLinearized) {
+                warn(QStringLiteral("尚未「應用」TIL——這是建檔前置步驟，完成前不能做 G7 / ICC。"));
+                break;
+            }
+            const auto g = printbase::profiling_gate(draft_.base, printbase::epson_p_active_channels());
+            if (!g.ready) {
+                QStringList t;
+                for (const auto& is : g.issues) t << gateIssueText(is);
+                warn(QStringLiteral("TIL = %1%，但建檔閘門未通過：%2").arg(draft_.base.totalInkLimit)
+                         .arg(t.join(QStringLiteral("；"))));
+                break;
+            }
+            ok(QStringLiteral("✓ 總墨量 TIL = %1%（在已線性化設備上測定）。建檔前置完成，可進入 G7 / ICC。")
+                   .arg(draft_.base.totalInkLimit));
+            break;
+        }
+        case 6: {  // 校準集 · 5 種列印方式自動跑（G7 + ICC）
+            QString why;
+            if (!canEnter(6, &why)) { warn(why); break; }
             // 自動化的是流程編排；測量本身永遠需要人機互動（放條、重掃、換紙）。
             // 先走逐條測量對話框，全部測完才繼續建 LUT/ICC。
             {
@@ -441,10 +559,11 @@ void CalibrationStepper::doStepAction() {
                 "• 黑+淺灰+四色 WF3 — 中性 SCTV ＋ G7 ✓\n"
                 "• RGB WF4 — G7＋ICC ✓\n"
                 "• 16-bit RGB WF6 — G7＋ICC ✓\n"
-                "（密度僅用於墨量上限；走紙已於步驟 3 建檔，本輪不重測）").arg(nozLine));
+                "（總墨量 TIL %2%、11 通道墨限與線性化已於步驟 5–6 完成；走紙已於步驟 3 建檔）")
+                   .arg(nozLine).arg(draft_.base.totalInkLimit));
             break;
         }
-        case 5: {  // 存為標準
+        case 7: {  // 存為標準
             draft_.paperName = paperNameEdit_->text().isEmpty() ? QStringLiteral("未命名紙") : paperNameEdit_->text();
             draft_.paperMeta = paperMetaEdit_->text();
             draft_.inkBatch  = batchEdit_->text();
@@ -460,11 +579,13 @@ void CalibrationStepper::doStepAction() {
                 next.inkBatch = draft_.inkBatch;   next.printer = draft_.printer;
                 next.paperId = draft_.paperId;     next.mediaAdvanceMm = draft_.mediaAdvanceMm;
                 next.feedMeasured = draft_.feedMeasured; next.qcPassed = draft_.qcPassed;
+                next.hasBase = draft_.hasBase;     next.base = draft_.base;
+                next.recalHistory.clear();         next.lastRecalibrated = QDateTime();
                 PaperState::instance().saveConfig(next);
             } else {
                 PaperState::instance().saveConfig(draft_);
             }
-            stepDone_[5] = true; updateStepList();
+            stepDone_[7] = true; updateStepList();
             emit finished();
             break;
         }

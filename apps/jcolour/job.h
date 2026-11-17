@@ -38,6 +38,9 @@ struct Job {
     QString iccProfilePath;
     QString colorSpace = "RGB";
     int     renderingIntent = 1; // 0=Perceptual, 1=Relative, 2=Saturation, 3=Absolute
+    // 色域外处理（engine oog_mapping.h OogStrategy）：0 视觉保真（摄影默认）/
+    // 1 色度最近（最小 ΔE00）/ 2 ICC 表。默认 = 相对比色 + 视觉保真。
+    int     oogStrategy = 0;
     bool    blackPointCompensation = true;
 
     // B&W

@@ -68,6 +68,7 @@ void PresetManager::savePreset(const PrintPreset& preset) {
     presetJson["iccProfilePath"] = preset.iccProfilePath;
     presetJson["inkMode"] = preset.inkMode;
     presetJson["renderingIntent"] = preset.renderingIntent;
+    presetJson["oogStrategy"] = preset.oogStrategy;
     presetJson["blackPointCompensation"] = preset.blackPointCompensation;
     presetJson["inkLimit"] = preset.inkLimit;
     presetJson["lcfLimit"] = preset.lcfLimit;
@@ -108,6 +109,7 @@ QList<PrintPreset> PresetManager::getAllPresets() const {
         preset.iccProfilePath = obj["iccProfilePath"].toString();
         preset.inkMode = obj["inkMode"].toString();
         preset.renderingIntent = obj["renderingIntent"].toInt(1);
+        preset.oogStrategy = obj["oogStrategy"].toInt(0);   // 旧预设无此键 → 视觉保真
         preset.blackPointCompensation = obj["blackPointCompensation"].toBool(true);
         preset.inkLimit = obj["inkLimit"].toDouble(400);
         preset.lcfLimit = obj["lcfLimit"].toDouble(200);
@@ -135,6 +137,7 @@ PrintPreset PresetManager::getPreset(const QString& name) const {
         preset.iccProfilePath = obj["iccProfilePath"].toString();
         preset.inkMode = obj["inkMode"].toString();
         preset.renderingIntent = obj["renderingIntent"].toInt(1);
+        preset.oogStrategy = obj["oogStrategy"].toInt(0);   // 旧预设无此键 → 视觉保真
         preset.blackPointCompensation = obj["blackPointCompensation"].toBool(true);
         preset.inkLimit = obj["inkLimit"].toDouble(400);
         preset.lcfLimit = obj["lcfLimit"].toDouble(200);

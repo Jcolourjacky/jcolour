@@ -77,6 +77,11 @@ struct PaperState::Impl {
         QJsonArray modes;
         for (bool b : c.modeBuilt) modes.append(b);
         o["modeBuilt"] = modes;
+        if (c.hasBase) o["printBase"] = printBaseToJson(c.base);
+        if (c.lastRecalibrated.isValid()) o["lastRecal"] = c.lastRecalibrated.toString(Qt::ISODate);
+        QJsonArray recal;
+        for (const auto& r : c.recalHistory) recal.append(recalRecordToJson(r));
+        if (!recal.isEmpty()) o["recalHistory"] = recal;
         return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
     }
 
@@ -104,6 +109,11 @@ struct PaperState::Impl {
         QJsonArray modes = o["modeBuilt"].toArray();
         for (int i = 0; i < kNumModes && i < modes.size(); ++i)
             c.modeBuilt[i] = modes[i].toBool();
+        c.hasBase = o.contains("printBase");
+        if (c.hasBase) c.base = printBaseFromJson(o["printBase"].toObject());
+        c.lastRecalibrated = QDateTime::fromString(o["lastRecal"].toString(), Qt::ISODate);
+        for (const auto& v : o["recalHistory"].toArray())
+            c.recalHistory.append(recalRecordFromJson(v.toObject()));
         return c;
     }
 

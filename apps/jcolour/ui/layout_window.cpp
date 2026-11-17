@@ -5,6 +5,13 @@
 #include "spot_tuner_dialog.h"
 #include "til_wizard.h"
 #include "g7_rgb_dialog.h"
+#include "about_dialog.h"
+#include "calibration_stepper.h"
+#include <QListWidget>
+#include "linearization_dialog.h"
+#include "oog_compare_dialog.h"
+#include "recalibration_dialog.h"
+#include "render_intent_options.h"
 #include "../paper_state.h"
 #include "../queue.h"
 #include "../nesting.h"
@@ -1467,6 +1474,19 @@ void LayoutWindow::buildMenus() {
         dlg->setAttribute(Qt::WA_DeleteOnClose);
         dlg->show();
     });
+    colour->addAction(QStringLiteral("打印机再校准（换纸 / 换墨批次）…"), [this] {
+        auto* dlg = new RecalibrationDialog(this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dlg, &RecalibrationDialog::applied, this, [this] {
+            statusBar()->showMessage(QStringLiteral("再校准已应用：只更新了线性化，特性文件未变"), 8000);
+        });
+        dlg->show();
+    });
+    colour->addAction(QStringLiteral("色域外处理 A/B 对比…"), [this] {
+        auto* dlg = new OogCompareDialog(this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show();
+    });
     colour->addAction(QStringLiteral("G7+ RGB 校正…"), [this] {
         const QString paper = paperCombo_ ? paperCombo_->currentText()
                                           : QStringLiteral("Photo Rag");
@@ -1483,7 +1503,12 @@ void LayoutWindow::buildMenus() {
     tools->addAction(QStringLiteral("作业核算（用量/成本）…"), [this] { openJobCostDialog(); });
     tools->addAction(QStringLiteral("米尺走纸校正…"), [this] { openEnvManager(); });
     tools->addAction(QStringLiteral("检查线性…"), [this] { openEnvManager(); });
-    mb->addMenu(QStringLiteral("帮助"));
+    QMenu* help = mb->addMenu(QStringLiteral("帮助"));
+    QAction* about = help->addAction(QStringLiteral("关于 jcolour（软件物料清单 / 第三方声明）…"), [this] {
+        AboutDialog dlg(this);
+        dlg.exec();
+    });
+    about->setMenuRole(QAction::AboutRole);
 }
 
 // ---- toolbar ----------------------------------------------------------------
@@ -2130,8 +2155,9 @@ QWidget* LayoutWindow::buildRightPanel() {
             nl->setFixedWidth(52);
             nl->setStyleSheet("color:#7A776D;");
             auto* nc = new QComboBox;
-            nc->addItems({QStringLiteral("可感知 Perceptual"), QStringLiteral("相对色度 Rel.Col"),
-                          QStringLiteral("饱和度"), QStringLiteral("绝对色度")});
+            nc->addItems(renderIntentLabels());          // 含色域外处理：视觉保真（默认）/ 色度最近
+            nc->setToolTip(renderIntentTooltip());
+            nc->setCurrentIndex(0);
             nh->addWidget(nl);
             nh->addWidget(nc, 1);
             auto* bpc = new QCheckBox(QStringLiteral("黑点补偿 BPC"));
@@ -2141,6 +2167,13 @@ QWidget* LayoutWindow::buildRightPanel() {
             auto* bh = new QHBoxLayout(btns);
             bh->setContentsMargins(10, 1, 10, 1);
             auto* ab = new QPushButton(QStringLiteral("A/B 软打样"));
+            ab->setToolTip(QStringLiteral("并排比较两种色域外处理（视觉保真 / 色度最近），选定后写回渲染意图"));
+            connect(ab, &QPushButton::clicked, this, [this, nc] {
+                auto* dlg = new OogCompareDialog(this);
+                dlg->setAttribute(Qt::WA_DeleteOnClose);
+                connect(dlg, &OogCompareDialog::strategyChosen, nc, &QComboBox::setCurrentIndex);
+                dlg->show();
+            });
             auto* pwt = new QPushButton(QStringLiteral("纸白模拟"));
             for (auto* b : {ab, pwt}) {
                 b->setFixedHeight(20);
@@ -2171,7 +2204,7 @@ QWidget* LayoutWindow::buildRightPanel() {
             std::initializer_list<QWidget*> base = {
                 hdLbl(sixteen ? QStringLiteral("16 位 RGB · 全面色彩管理（高精度）")
                               : QStringLiteral("RGB · 全面色彩管理")),
-                iccRow, intRow, bpc, hint(QStringLiteral("GamutAdvisor：此图饱和度高 → 建议可感知。")), btns,
+                iccRow, intRow, bpc, hint(QStringLiteral("GamutAdvisor：此图饱和度高 → 建议视觉保真（保外观）。")), btns,
                 hdLbl(QStringLiteral("Or / Gr / V 扩展色调用率")),
                 meter("Or", 42), meter("Gr", 18), meter("V", 9)};
             auto* p = pageOf(base);
@@ -2549,6 +2582,39 @@ void LayoutWindow::runActionForShot(const QString& action) {
         QTimer::singleShot(0, this, [this] { openJobCostDialog(); });   // 模态对话框延迟弹出，让截图定时器先排上
     else if (action == QLatin1String("g7rgb")) {
         auto* dlg = new G7RgbDialog(QStringLiteral("Photo Rag"), this);
+        dlg->show();
+    }
+    else if (action.startsWith(QLatin1String("recal"))) {
+        auto* dlg = new RecalibrationDialog(this);
+        dlg->show();
+        if (action == QLatin1String("recal-sim"))   // 截图验证：模拟漂移 → 计算 → 复测
+            for (const char* t : {"模拟整张（含模拟漂移）", "计算校正", "复测验证（经新曲线）", "模拟整张（含模拟漂移）"})
+                for (auto* b : dlg->findChildren<QPushButton*>())
+                    if (b->text() == QString::fromUtf8(t)) { b->click(); break; }
+    }
+    else if (action.startsWith(QLatin1String("lin"))) {
+        auto* dlg = new LinearizationDialog(QStringLiteral("Photo Rag"), {}, this);
+        dlg->show();
+        if (action == QLatin1String("lin-sim"))
+            for (auto* b : dlg->findChildren<QPushButton*>())
+                if (b->text() == QStringLiteral("模拟整张（无仪器演示）")) { b->click(); break; }
+    }
+    else if (action == QLatin1String("stepper-lock")) {   // 截图验证：建档向导跳步被锁
+        auto* dlg = new QDialog(this);
+        dlg->resize(920, 640);
+        auto* l = new QVBoxLayout(dlg);
+        l->setContentsMargins(0, 0, 0, 0);
+        auto* st = new CalibrationStepper(dlg);
+        l->addWidget(st);
+        dlg->show();
+        if (auto* list = st->findChild<QListWidget*>()) list->setCurrentRow(6);
+    }
+    else if (action == QLatin1String("oogab")) {
+        auto* dlg = new OogCompareDialog(this);
+        dlg->show();
+    }
+    else if (action == QLatin1String("about")) {
+        auto* dlg = new AboutDialog(this);
         dlg->show();
     }
     else if (action == QLatin1String("til")) {

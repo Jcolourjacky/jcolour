@@ -34,6 +34,15 @@ class TILWizardDialog : public QDialog {
 public:
     explicit TILWizardDialog(const QString& paperName, QWidget* parent = nullptr);
 
+    // 建档向导串联：第 1 步的单通道墨限由「每通道线性化」步骤给出（已在
+    // 线性化设备上），预填后 TIL 靶即在线性化空间里展开。
+    void setChannelLimits(int c, int m, int y, int k, const QString& source);
+    int  appliedTil() const { return applied_; }
+
+signals:
+    // 「应用到打印环境」后发出：建档向导据此把 TIL 记进地基（tilMeasuredOnLinearized）
+    void tilApplied(int til);
+
 private:
     struct Row {
         int    tac = 0;
@@ -61,6 +70,8 @@ private:
     QLabel* verdict_ = nullptr;
     QPushButton* applyBtn_ = nullptr;
     int suggested_ = 0;          // 0 = 尚无建议
+    int applied_ = 0;            // 已应用的 TIL（0 = 未应用）
+    QLabel* chSource_ = nullptr; // 通道墨限来源说明
     int visualCol_ = -1;         // 视觉 TIL：操作员点选的最佳列（-1 未选）
 };
 

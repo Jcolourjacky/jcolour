@@ -88,6 +88,10 @@ TILWizardDialog::TILWizardDialog(const QString& paperName, QWidget* parent)
     chRow->addWidget(chHint);
     chRow->addStretch();
     v->addLayout(chRow);
+    chSource_ = new QLabel;
+    chSource_->setStyleSheet("font-size:10.5px;color:#2F9E6B;");
+    chSource_->setVisible(false);
+    v->addWidget(chSource_);
 
     auto* step2Head = new QLabel(QStringLiteral("第 2 步 · 总墨 TIL 靶"));
     step2Head->setStyleSheet("font-weight:700;color:#100A36;");
@@ -160,6 +164,18 @@ TILWizardDialog::TILWizardDialog(const QString& paperName, QWidget* parent)
         analyze();
     });
 
+    syncRangeToChannels();
+}
+
+void TILWizardDialog::setChannelLimits(int c, int m, int y, int k, const QString& source) {
+    const int vals[4] = {c, m, y, k};
+    for (int i = 0; i < 4; ++i) {
+        const QSignalBlocker b(chLimit_[i]);
+        chLimit_[i]->setValue(qBound(30, vals[i], 100));
+    }
+    chSource_->setText(QStringLiteral("✓ 单通道墨限已由%1给出（C/M/Y/K 取 C/VM/Y/主黑）；"
+                                      "TIL 靶按线性化后的通道值打印。").arg(source));
+    chSource_->setVisible(true);
     syncRangeToChannels();
 }
 
@@ -368,6 +384,8 @@ void TILWizardDialog::applyToEnvironment() {
     s.setValue(QStringLiteral("til/%1").arg(paperName_), suggested_);
     s.setValue(QStringLiteral("til/%1_at").arg(paperName_),
                QDateTime::currentDateTime().toString(Qt::ISODate));
+    applied_ = suggested_;
+    emit tilApplied(applied_);
     verdict_->setText(verdict_->text() +
         QStringLiteral("　<b style='color:#2F9E6B'>✓ 已写入「%1」打印环境</b>").arg(paperName_));
 }

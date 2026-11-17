@@ -72,6 +72,7 @@ target_include_directories(jcolour-cynsn PUBLIC src)
 add_library(jcolour-icc STATIC
     src/color_pipeline.cpp
     src/tiff_io.cpp
+    src/oog_mapping.cpp        # 色域外映射：视觉保真 / 色度最近（Lab 抽象配置文件）
 )
 
 # Find full library paths for linking
@@ -136,10 +137,13 @@ add_library(jcolour-calibration STATIC
     calibration/cmykogv_target.cpp
     calibration/black_split.cpp
     calibration/target_measure.cpp
+    calibration/print_base.cpp      # 建档前置：墨限 + 线性化(SCTV) + TIL + 建档闸门
+    calibration/printer_sim.cpp     # 模拟打印机（无仪器演示 / 测试）
+    calibration/recalibration.cpp   # 打印机再校准：少量色块只更新线性化
     workflow/wf1_measure.cpp
     workflow/wf1_chart.cpp
 )
-target_link_libraries(jcolour-calibration PUBLIC ${SQLITE3_FULL_PATH})
+target_link_libraries(jcolour-calibration PUBLIC ${SQLITE3_FULL_PATH} jcolour-spectral)
 target_include_directories(jcolour-calibration PUBLIC
     calibration
     workflow
@@ -912,6 +916,42 @@ if(Catch2_FOUND)
     )
     add_test(NAME all-tests COMMAND test-all)
 endif()
+
+# ============================================================
+# Standalone tests (no Catch2 needed — always built)
+# ============================================================
+# tests/standalone/check.h is a tiny assertion harness so these run on machines
+# without Catch2 (the Catch2 suites above are skipped there).
+add_executable(test-print-base
+    tests/standalone/test_print_base.cpp
+    calibration/print_base.cpp
+    calibration/printer_sim.cpp
+    src/spectral.cpp
+    src/delta_e.cpp
+)
+target_include_directories(test-print-base PRIVATE src calibration tests/standalone)
+add_test(NAME print-base COMMAND test-print-base)
+
+add_executable(test-recalibration
+    tests/standalone/test_recalibration.cpp
+    calibration/print_base.cpp
+    calibration/printer_sim.cpp
+    calibration/recalibration.cpp
+    src/spectral.cpp
+    src/delta_e.cpp
+)
+target_include_directories(test-recalibration PRIVATE src calibration tests/standalone)
+add_test(NAME recalibration COMMAND test-recalibration)
+
+add_executable(test-oog-mapping
+    tests/standalone/test_oog_mapping.cpp
+    src/oog_mapping.cpp
+    src/spectral.cpp
+    src/delta_e.cpp
+)
+target_link_libraries(test-oog-mapping PRIVATE ${LCMS2_FULL_PATH})
+target_include_directories(test-oog-mapping PRIVATE src tests/standalone ${LCMS2_INCLUDE_DIRS})
+add_test(NAME oog-mapping COMMAND test-oog-mapping)
 
 # ============================================================
 # Install

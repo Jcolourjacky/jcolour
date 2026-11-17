@@ -3,6 +3,7 @@
 #include "theme.h"
 #include "state_machine.h"  // engine: jcolour::calibration
 #include "calibration_stepper.h"
+#include "recalibration_dialog.h"
 #include "../paper_state.h"
 
 #include <QtWidgets>
@@ -187,7 +188,14 @@ PrintEnvironmentManager::PrintEnvironmentManager(QWidget* parent) : QDialog(pare
     // footer
     auto* foot = new QHBoxLayout;
     foot->addWidget(new QPushButton(QStringLiteral("全部检查")));
-    foot->addWidget(new QPushButton(QStringLiteral("重做线性")));
+    auto* recal = new QPushButton(QStringLiteral("再校准（换纸 / 换墨批次）…"));
+    recal->setToolTip(QStringLiteral("48 块小靶把机器拉回建档状态：只更新线性化，不重建 ICC"));
+    connect(recal, &QPushButton::clicked, this, [this] {
+        RecalibrationDialog dlg(this);
+        dlg.exec();
+        rebuildEnvList();
+    });
+    foot->addWidget(recal);
     foot->addStretch(1);
     auto* ok = new QPushButton(QStringLiteral("套用并关闭"));
     ok->setObjectName("primary");

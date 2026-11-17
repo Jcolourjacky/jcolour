@@ -19,6 +19,8 @@
 #include <array>
 #include <memory>
 
+#include "print_base_io.h"   // 建档前置地基（墨限 + 线性化 + TIL）与再校准记录
+
 namespace jcolour {
 
 // The 5 print modes, valued by their engine workflow id (5/CMYK is skipped).
@@ -46,6 +48,14 @@ struct PaperConfig {
     double    linBaselineDe = 0.0;      // 建檔時線性化(SCTV)殘差 ΔE — 自動校驗基準
     double    g7BaselineDe  = 0.0;      // 建檔時 G7 平均 ΔE — 自動校驗基準（彩色，校驗只看不調）
     std::array<bool, kNumModes> modeBuilt{false, false, false, false, false};
+
+    // 建档前置地基（SmartProfiler 式：先线性化与限墨，再建档）。旧版环境没有
+    // 记录时 hasBase = false——再校准需要它作为「建档时的状态」。
+    bool                 hasBase = false;
+    printbase::PrintBase base;
+    // 再校准：只更新 base 里的线性化曲线；ICC / G7 / 版本号都不变
+    QDateTime            lastRecalibrated;
+    QVector<RecalRecord> recalHistory;
 };
 
 // Pre-print status gate, graded per the project decision:
